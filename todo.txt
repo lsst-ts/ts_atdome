@@ -1,0 +1,33 @@
+Suggested improvements
+
+* Improve DomeCsc as follows:
+  * Output the `settingsAppliedDomeTcp` event.
+
+* Improve the ATDome TCP/IP interface as follows:
+  * Report invalid commands (unknownc ommands, invalid parameters...)
+  * Report SCB link OK and auto shutdown activated in short status
+    and do NOT report "auto close enabled" -- save that for full status.
+
+* Improve the SAL XML as follows:
+  * Remove moveShutterDropoutDoor and moveShutterMainDoor commands
+    or modify them to only allow fully opened or fully closed;
+    the TCP/IP interface does not allow anything in between.
+  * Remove the stopAzimuth and stopShutter commands;
+    the TCP/IP interface does not support them.
+  * evt_settingsAppliedDomeController should use the term
+    "enabled" instead of "active".
+  * Add an event to for rain detected or not detected, and clouds
+    detected or not detected (preferably the same event).
+  * Preferably combine events for "in position" and state of axes
+    e.g. one event for commanded azimuth, state of azimuth and
+    azimuth in position, and one event for the same information
+    for the two doors.
+    Failing that, pick one of azimuthState or azimuthMovingDirection;
+    they are entirely redundant.
+  * Ditch enums AzimuthState_InMotionState,
+    AzimuthState_StoppingMotionState and ShutterDoorState_NotInMotionState;
+    none can be output.
+  * Consider ditching events internalCommand, internalStatus,
+    loopTimeOutOfRange and rejectedCommand. All can use logging instead.
+  * Consider ditching event detailedState; this CSC is so simple
+    that it doesn't seem necessary.
