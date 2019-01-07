@@ -288,7 +288,8 @@ class ATDomeCsc(salobj.BaseCsc):
         if self.connected:
             raise RuntimeError("Already connected")
         try:
-            coro = asyncio.open_connection(host=self.host, port=self.port)
+            host = "127.0.0.1" if self.simulation_mode == 1 else self.host
+            coro = asyncio.open_connection(host=host, port=self.port)
             self.reader, self.writer = await asyncio.wait_for(coro, timeout=5)
             self.log.debug("connected")
         except Exception as e:
