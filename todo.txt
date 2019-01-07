@@ -5,29 +5,64 @@ Suggested improvements
 
 * Improve the ATDome TCP/IP interface as follows:
   * Report invalid commands (unknownc ommands, invalid parameters...)
-  * Report SCB link OK and auto shutdown activated in short status
-    and do NOT report "auto close enabled" -- save that for full status.
+  * Improve status such that:
+    * All useful status is displayed by short status
+    * Parameters are ONLY displayed by full status.
+    * Make sure it is easy to tell if an axis has arrived and if it's ever going to get there
+      (e.g. not if a move was aborted by an estop or ST command).
+    * Specific recommendations:
+      * Report the following in short status:
+        * SCB link OK
+        * Commanded position for azimuth, dropout door and main door
+        * Auto close activated? (perhaps as another bit in the line 5 code)
+        * Motion was aborted by the ST command (perhaps as another bit in line 5 code)
+      * Do NOT report "auto close enabled" in short status -- save that for full status.
+      * Make sure the move bits in line 5 are on while the axis is still moving, even if it has been told to stop.
+  * Add the following information to the manual:
+    * Is "right" increasing azimuth or decreasing azimuth?
+      Either document this or stop using the ambiguous terms "right" and "left" in the manual
+      and in status codes (e.g. change RR/RL to R+/R- in short status line 5).
+    * Does the dome always that the shortest path in azimuth? I assume so, but the manual should
+      clearly state that it does. (In other words, a move from 0 to 355 should be a move of 5 degrees
+      in the directon of decreasing azimuth).
+    * What happens if a new move command is sent while the same axis is already being moved,
+      e.g. MV while moving in azimuth, or SO while opening or closing a door?
+      I believe and hope that it "just works", but the manual should clearly say.
+    * What happens if a MV command arrives while homing? I hope it is rejected, but...
+    * What happens if a HM command arrives while homing? I hope it works, but...
+    * What is the line 5 move code while homing? Are the moving left/right bits also on? I hope so, but...
+    * What is the line 5 move code while stopping, e.g. if the estop is activated
+      and azimuth is decelerating to a stop is the moving left/right bit on? I hope so, but...
 
 * Improve the SAL XML as follows:
-  * Remove moveShutterDropoutDoor and moveShutterMainDoor commands
-    or modify them to only allow fully opened or fully closed;
-    the TCP/IP interface does not allow anything in between.
-  * Remove the stopAzimuth and stopShutter commands;
+  * Combine `moveShutterDropoutDoor`, `moveShutterMainDoor` and `openShutter` and `closeShutter` commands.
+    The TCP/IP interface allows commanding each door fully opened or fully closed, but nothing in between.
+    I suggest a single command with a bitmask, e.g. `moveShutter` with a field `position` that can be set to
+    00 to close both, 11 to open both, or 01 or 10 to open just one.
+    Or if we are positive that LSST will never need this capability
+    then ditch the first two commands and consider combining the second two into one command
+    with a boolean field false/0=both closed, true/1=both open.
+  * Remove the `stopAzimuth` and `stopShutter` commands;
     the TCP/IP interface does not support them.
-  * evt_settingsAppliedDomeController should use the term
-    "enabled" instead of "active".
-  * Add an event to for rain detected or not detected, and clouds
-    detected or not detected (preferably the same event).
+  * `evt_settingsAppliedDomeController` should use the term
+    "enabled" instead of "active" for its fields.
   * Preferably combine events for "in position" and state of axes
-    e.g. one event for commanded azimuth, state of azimuth and
-    azimuth in position, and one event for the same information
-    for the two doors.
-    Failing that, pick one of azimuthState or azimuthMovingDirection;
+    into a single event (or two events, one or azimuth, one for shutter doors):
+    * commanded azimuth
+    * azimuth state
+    * azimuth in position?
+    * commanded shutter: a bitmask or 2 fields if we can control main and dropout doors separately
+    * shutter state: 2 fields (or possibly a bitmask) if we can control main and dropout doors separately
+    * shutter in position: yes/no/unknown (if SCB link down): 2 fields or bitmask if we can control main and dropout separately
+    Failing that, pick one of `azimuthState` or `azimuthMovingDirection`;
     they are entirely redundant.
-  * Ditch enums AzimuthState_InMotionState,
-    AzimuthState_StoppingMotionState and ShutterDoorState_NotInMotionState;
+  * Ditch enums `AzimuthState_InMotionState`,
+    `AzimuthState_StoppingMotionState` and `ShutterDoorState_NotInMotionState`;
     none can be output.
-  * Consider ditching events internalCommand, internalStatus,
-    loopTimeOutOfRange and rejectedCommand. All can use logging instead.
-  * Consider ditching event detailedState; this CSC is so simple
-    that it doesn't seem necessary.
+  * Consider ditching events `internalCommand`, `internalStatus`,
+    `loopTimeOutOfRange` and `rejectedCommand`. Use logging instead.
+  * Consider ditching event `detailedState`; this CSC is so simple that it doesn't seem necessary.
+  * Consider a "breakthrough" command that sends arbitrary text to the TCP/IP interface.
+    That would allow fixing problems and tweaking configuration without closing the CSC
+    and telnetting directly to the TCP/IP interface. That command should trigger a full
+    status so any changes to configuration are correctly recorded in the EFD.
