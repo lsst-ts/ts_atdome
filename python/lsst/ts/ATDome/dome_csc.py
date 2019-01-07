@@ -105,6 +105,8 @@ class ATDomeCsc(salobj.BaseCsc):
 
     async def do_moveAzimuth(self, id_data):
         azimuth = id_data.data.azimuth
+        if azimuth < 0 or azimuth > 360:
+            raise salobj.ExpectedError(f"azimuth={azimuth} deg; must be in range [0, 360]")
         await self.cmd_queue.put(f"{azimuth:0.3f} MV")
         self.position_data.azimuthPositionSet = azimuth
 

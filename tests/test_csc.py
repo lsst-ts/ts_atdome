@@ -110,6 +110,12 @@ class CscTestCase(unittest.TestCase):
             self.assertAlmostEqual(position.azimuthPositionSet, move_az_data.azimuth)
             self.assertAlmostEqual(position.azimuthPosition, move_az_data.azimuth)
 
+            # try several invalid values for azimuth
+            for bad_az in (-0.001, 360.001):
+                move_az_data.azimuth = bad_az
+                with salobj.test_utils.assertRaisesAckError():
+                    await harness.remote.cmd_moveAzimuth.start(move_az_data, timeout=2)
+
             await harness.stop()
 
         asyncio.get_event_loop().run_until_complete(doit())
