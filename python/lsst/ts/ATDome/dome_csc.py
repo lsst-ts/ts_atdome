@@ -248,19 +248,21 @@ class ATDomeCsc(salobj.BaseCsc):
             status = SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotionState
         return status
 
-    def compute_door_state(self, open_pct, closing_code, move_code):
+    def compute_door_state(self, open_pct, is_main, move_code):
         """Compute data for the mainDoorState or dropoutDoorState event.
 
         Parameters
         ----------
         open_pct : `float`
             Percent opening.
-        closing_code : `MoveCode`
-            Move code for closing this door.
+        is_main : `bool`
+            True if the main door, False if the dropout door.
         move_code : `int`
             Motion code: the integer from line 5 of short status.
         """
-        door_mask = closing_code | (closing_code*2)
+        closing_code = MoveCode.MainDoorClosing if is_main else MoveCode.DropoutDoorClosing
+        opening_code = MoveCode.MainDoorOpening if is_main else MoveCode.DropoutDoorOpening
+        door_mask = closing_code | opening_code
         door_state = None
         if move_code & door_mask == 0:
             if open_pct == 0:
@@ -269,9 +271,9 @@ class ATDomeCsc(salobj.BaseCsc):
                 door_state = SALPY_ATDome.ATDome_shared_ShutterDoorState_OpenedState
             else:
                 door_state = SALPY_ATDome.ATDome_shared_ShutterDoorState_PartiallyOpenedState
-        elif move_code & MoveCode.MainDoorClosing:
+        elif move_code & closing_code:
             door_state = SALPY_ATDome.ATDome_shared_ShutterDoorState_ClosingState
-        elif move_code & MoveCode.MainDoorOpening:
+        elif move_code & opening_code:
             door_state = SALPY_ATDome.ATDome_shared_ShutterDoorState_OpeningState
         if door_state is None:
             raise RuntimeError(f"Could not parse main door state from move_code={move_code}")
@@ -369,14 +371,14 @@ class ATDomeCsc(salobj.BaseCsc):
 
         main_door_state = self.compute_door_state(
             open_pct=self.position_data.mainDoorOpeningPercentage,
-            closing_code=MoveCode.MainDoorClosing,
+            is_main=True,
             move_code=move_code)
         if self.set_field(self.main_door_state_data, "state", main_door_state, force=self.is_first_status):
             self.evt_mainDoorState.put(self.main_door_state_data)
 
         dropout_door_state = self.compute_door_state(
             open_pct=self.position_data.dropoutOpeningPercentage,
-            closing_code=MoveCode.DropoutDoorClosing,
+            is_main=False,
             move_code=move_code)
         if self.set_field(self.dropout_door_state_data, "state", dropout_door_state,
                           force=self.is_first_status):
