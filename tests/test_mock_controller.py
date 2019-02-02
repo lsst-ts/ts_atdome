@@ -96,6 +96,7 @@ class MockTestCase(unittest.TestCase):
             self.assertTrue(rem_status.rain_sensor_enabled)
             self.assertTrue(rem_status.cloud_sensor_enabled)
             self.assertAlmostEqual(rem_status.tolerance.deg, 1)
+            self.assertAlmostEqual(rem_status.home_azimuth.deg, self.ctrl.home_azimuth)
             self.assertAlmostEqual(rem_status.high_speed.deg, 6)
             self.assertAlmostEqual(rem_status.watchdog_timer, 600)
             self.assertAlmostEqual(rem_status.reversal_delay, 2)

@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 
 import asyncio
+import math
 import unittest
 
 from lsst.ts import salobj
@@ -51,8 +52,8 @@ class CscTestCase(unittest.TestCase):
             state = await harness.remote.evt_summaryState.next(flush=False, timeout=5)
             self.assertEqual(state.summaryState, salobj.State.ENABLED)
 
-            az_move_dir = await harness.remote.evt_azimuthMovingDirection.next(flush=False, timeout=2)
-            self.assertEqual(az_move_dir.motionStatus, SALPY_ATDome.ATDome_shared_MovingDirection_NotMoving)
+            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=2)
+            self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotionState)
 
             main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=2)
             self.assertEqual(main_door_state.state, SALPY_ATDome.ATDome_shared_ShutterDoorState_ClosedState)
@@ -66,9 +67,9 @@ class CscTestCase(unittest.TestCase):
             self.assertEqual(position.dropoutOpeningPercentage, 0)
             self.assertEqual(position.mainDoorOpeningPercentage, 0)
             self.assertAlmostEqual(position.azimuthPosition, 0)
-            self.assertEqual(position.dropoutOpeningPercentageSet, 0)
-            self.assertEqual(position.mainDoorOpeningPercentageSet, 0)
-            self.assertAlmostEqual(position.azimuthPositionSet, 0)
+            self.assertTrue(math.isnan(position.dropoutOpeningPercentageSet))
+            self.assertTrue(math.isnan(position.mainDoorOpeningPercentageSet))
+            self.assertTrue(math.isnan(position.azimuthPositionSet))
 
             await harness.stop()
 
@@ -81,40 +82,31 @@ class CscTestCase(unittest.TestCase):
             self.assertEqual(state.summaryState, salobj.State.ENABLED)
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=2)
             self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotionState)
-            az_move_dir = await harness.remote.evt_azimuthMovingDirection.next(flush=False, timeout=5)
-            self.assertEqual(az_move_dir.motionStatus, SALPY_ATDome.ATDome_shared_MovingDirection_NotMoving)
 
-            move_az_data = harness.remote.cmd_moveAzimuth.DataType()
-            daz = -6
-            move_az_data.azimuth = 360 + daz
-            await harness.remote.cmd_moveAzimuth.start(move_az_data, timeout=2)
+            desired_azimuth = 354
+            harness.remote.cmd_moveAzimuth.set(azimuth=desired_azimuth)
+            await harness.remote.cmd_moveAzimuth.start(timeout=2)
 
             # wait for the move to begin and check status
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=1)
             self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_MovingCCWState)
-            az_move_dir = await harness.remote.evt_azimuthMovingDirection.next(flush=False, timeout=1)
-            self.assertEqual(az_move_dir.motionStatus,
-                             SALPY_ATDome.ATDome_shared_MovingDirection_CounterClockWise)
             position = harness.remote.tel_position.get()
-            self.assertAlmostEqual(position.azimuthPositionSet, move_az_data.azimuth)
-            self.assertGreater(position.azimuthPosition, move_az_data.azimuth)
+            self.assertAlmostEqual(position.azimuthPositionSet, desired_azimuth)
+            self.assertGreater(position.azimuthPosition, desired_azimuth)
             self.assertLess(position.azimuthPosition, 360)
 
             # wait for the move to end and check status
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=1)
             self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotionState)
-            az_move_dir = await harness.remote.evt_azimuthMovingDirection.next(flush=False, timeout=1)
-            self.assertEqual(az_move_dir.motionStatus,
-                             SALPY_ATDome.ATDome_shared_MovingDirection_NotMoving)
             position = harness.remote.tel_position.get()
-            self.assertAlmostEqual(position.azimuthPositionSet, move_az_data.azimuth)
-            self.assertAlmostEqual(position.azimuthPosition, move_az_data.azimuth)
+            self.assertAlmostEqual(position.azimuthPositionSet, desired_azimuth)
+            self.assertAlmostEqual(position.azimuthPosition, desired_azimuth)
 
             # try several invalid values for azimuth
             for bad_az in (-0.001, 360.001):
-                move_az_data.azimuth = bad_az
+                harness.remote.cmd_moveAzimuth.set(azimuth=bad_az)
                 with salobj.test_utils.assertRaisesAckError():
-                    await harness.remote.cmd_moveAzimuth.start(move_az_data, timeout=2)
+                    await harness.remote.cmd_moveAzimuth.start(timeout=2)
 
             await harness.stop()
 
@@ -131,12 +123,9 @@ class CscTestCase(unittest.TestCase):
             dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False, timeout=2)
             self.assertEqual(dropout_door_state.state,
                              SALPY_ATDome.ATDome_shared_ShutterDoorState_ClosedState)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False, timeout=2)
-            self.assertTrue(shutter_in_pos.inPosition)
 
             # open both doors
-            cmd_data = harness.remote.cmd_openShutter.DataType()
-            await harness.remote.cmd_openShutter.start(cmd_data, timeout=2)
+            await harness.remote.cmd_openShutter.start(timeout=2)
 
             # wait for the move to begin and check status
             self.assertEqual(state.summaryState, salobj.State.ENABLED)
@@ -160,8 +149,7 @@ class CscTestCase(unittest.TestCase):
             self.assertTrue(shutter_in_pos.inPosition)
 
             # close both doors
-            cmd_data = harness.remote.cmd_closeShutter.DataType()
-            await harness.remote.cmd_closeShutter.start(cmd_data, timeout=2)
+            await harness.remote.cmd_closeShutter.start(timeout=2)
 
             # wait for the move to begin and check status
             self.assertEqual(state.summaryState, salobj.State.ENABLED)
@@ -195,24 +183,17 @@ class CscTestCase(unittest.TestCase):
             self.assertEqual(state.summaryState, salobj.State.ENABLED)
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=1)
             self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotionState)
-            az_in_position = await harness.remote.evt_azimuthInPosition.next(flush=False, timeout=1)
-            self.assertTrue(az_in_position.inPosition)
             main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=2)
             self.assertEqual(main_door_state.state,
                              SALPY_ATDome.ATDome_shared_ShutterDoorState_ClosedState)
             dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False, timeout=2)
             self.assertEqual(dropout_door_state.state,
                              SALPY_ATDome.ATDome_shared_ShutterDoorState_ClosedState)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False, timeout=1)
-            self.assertTrue(shutter_in_pos.inPosition)
 
             # move azimuth and open both doors
-            move_az_data = harness.remote.cmd_moveAzimuth.DataType()
-            daz = -6
-            move_az_data.azimuth = 360 + daz
-            await harness.remote.cmd_moveAzimuth.start(move_az_data, timeout=2)
-            cmd_data = harness.remote.cmd_openShutter.DataType()
-            await harness.remote.cmd_openShutter.start(cmd_data, timeout=2)
+            harness.remote.cmd_moveAzimuth.set(azimuth=354)
+            await harness.remote.cmd_moveAzimuth.start(timeout=2)
+            await harness.remote.cmd_openShutter.start(timeout=2)
 
             # wait for the moves to start
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=1)
@@ -231,8 +212,7 @@ class CscTestCase(unittest.TestCase):
             # stop all motion
             # this should not produce new "inPosition" events, because
             # motion is stopped while the axes are still not in position
-            cmd_data = harness.remote.cmd_stopMotionAllAxis.DataType()
-            await harness.remote.cmd_stopMotionAllAxis.start(cmd_data, timeout=2)
+            await harness.remote.cmd_stopMotion.start(timeout=2)
 
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=1)
             self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotionState)

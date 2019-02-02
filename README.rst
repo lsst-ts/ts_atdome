@@ -2,7 +2,7 @@
 ts_ATDome
 #########
 
-``ts_ATDome`` is a package in the `LSST Science Pipelines <https://pipelines.lsst.io>`_.
+``ts_ATDome`` is an LSST Telescope and Site package that provides a simulator for the auxiliary telescope dome (ATDome) controller.
 
 The primary classes are:
 
