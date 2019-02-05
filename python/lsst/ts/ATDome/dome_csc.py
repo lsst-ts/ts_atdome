@@ -34,6 +34,8 @@ from .status import ShortStatus, RemainingStatus
 
 import SALPY_ATDome
 
+_LOCAL_HOST = "127.0.0.1"
+
 
 class MoveCode(enum.IntFlag):
     AzPositive = 1
@@ -91,9 +93,9 @@ class ATDomeCsc(salobj.BaseCsc):
         self.short_per_full = 5  # number of short status between full status
         self.az_tolerance = Angle(0.2, u.deg)  # tolerance for "in position"
         self.status_sleep_task = None  # sleep in status_loop
-        self.configure()
         super().__init__(SALPY_ATDome, index=index, initial_state=initial_state,
                          initial_simulation_mode=initial_simulation_mode)
+        self.configure()
         # initialize commanded positions
         self.tel_position.set(azimuthPositionSet=math.nan,
                               dropoutDoorOpeningPercentageSet=math.nan,
@@ -177,9 +179,13 @@ class ATDomeCsc(salobj.BaseCsc):
             }.get(cmd, 0)
 
             try:
-                read_bytes = await asyncio.wait_for(self.reader.readuntil(">".encode()), timeout=2)
+                read_bytes = await asyncio.wait_for(self.reader.readuntil(">".encode()),
+                                                    timeout=self.read_timeout)
             except Exception as e:
-                err_msg = "TCP/IP read failed"
+                if isinstance(e, asyncio.streams.IncompleteReadError):
+                    err_msg = "TCP/IP controller exited"
+                else:
+                    err_msg = "TCP/IP read failed"
                 self.log.exception(err_msg)
                 await self.disconnect()
                 self.summary_state = salobj.State.FAULT
@@ -283,27 +289,33 @@ class ATDomeCsc(salobj.BaseCsc):
             raise RuntimeError(f"Could not parse main door state from move_code={move_code}")
         return door_state
 
-    def configure(self, host="127.0.0.1", port=3210, readTimeout=5, writeTimeout=5, connectionTimeout=5):
+    def configure(self, host=_LOCAL_HOST, port=3210, connection_timeout=2, read_timeout=2):
         """Configure the CSC.
 
         Parameters
         ----------
         host : `str`
-            Host IP address of ATDome TCP/IP controller
+            Host IP address of ATDome TCP/IP controller.
+            Ignored in simulation mode.
         port : `int`
-            Port of ATDome TCP/IP controller
-        readTimeout : `float`
-            Time limit for TCP/IP read (sec)
-        writeTimeout : `float`
-            Time limit for TCP/IP write (sec)
-        connectionTimeout : `float`
-            Time limit for TCP/IP connection (sec)
+            Port of ATDome TCP/IP controller.
+        connection_timeout : `float`
+            Time limit for TCP/IP connection (sec).
+        read_timeout : `float`
+            Time limit for TCP/IP read (sec).
         """
-        self.port = port
+        assert read_timeout > 0
+        assert connection_timeout > 0
         self.host = host
-        self.readTimeout = readTimeout
-        self.writeTimeout = writeTimeout
-        self.connectionTimeout = connectionTimeout
+        self.port = port
+        self.connection_timeout = connection_timeout
+        self.read_timeout = read_timeout
+        self.evt_settingsAppliedDomeTcp.set_put(
+            host=host,
+            port=port,
+            connectionTimeout=connection_timeout,
+            readTimeout=read_timeout,
+        )
 
     async def connect(self):
         """Connect to the dome controller's TCP/IP port.
@@ -312,9 +324,9 @@ class ATDomeCsc(salobj.BaseCsc):
         if self.connected:
             raise RuntimeError("Already connected")
         try:
-            host = "127.0.0.1" if self.simulation_mode == 1 else self.host
+            host = _LOCAL_HOST if self.simulation_mode == 1 else self.host
             coro = asyncio.open_connection(host=host, port=self.port)
-            self.reader, self.writer = await asyncio.wait_for(coro, timeout=5)
+            self.reader, self.writer = await asyncio.wait_for(coro, timeout=self.connection_timeout)
             self.log.debug("connected")
         except Exception as e:
             err_msg = f"Could not open connection to host={self.host}, port={self.port}"
