@@ -6,7 +6,7 @@
 lsst.ts.ATDome
 ##############
 
-Controller for the LSST auxiliary telescope dome (ATDome).
+Controller for the LSST auxiliary telescope dome.
 
 .. _lsst.ts.ATDome-using:
 
@@ -35,8 +35,8 @@ Usage
 
 The primary classes are:
 
-* `ATDomeCsc`: a simulator for the ATDome CSC.
-* `MockDomeController`: a simulator for the ATDome TCP/IP interface.
+* `ATDomeCsc`: controller for the auxiliary telescope dome.
+* `MockDomeController`: simulator for the auxiliary telescope dome TCP/IP interface.
 
 Run the ``ATDome`` controller  using ``bin/run_atdome.py`` (which only exists after you build the package).
 
@@ -47,7 +47,7 @@ Run the ``ATDome`` controller  using ``bin/run_atdome.py`` (which only exists af
 Contributing
 ============
 
-``lsst.ts.ATDome`` is developed at https://github.com/lsst-ts/ts_ATDomeSimulator.
+``lsst.ts.ATDome`` is developed at https://github.com/lsst-ts/ts_ATDome.
 You can find Jira issues for this module under the `ts_ATDome <https://jira.lsstcorp.org/issues/?jql=project%20%3D%20DM%20AND%20component%20%3D%20ts_ATDome>`_ component.
 
 .. _lsst.ts.ATDome-pyapi:

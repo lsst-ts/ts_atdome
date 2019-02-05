@@ -53,7 +53,7 @@ class Axis(enum.Flag):
 
 
 class ATDomeCsc(salobj.BaseCsc):
-    """AuxTel dome CSC simulator
+    """AuxTel dome CSC
 
     Parameters
     ----------
