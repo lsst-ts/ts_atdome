@@ -165,7 +165,7 @@ class ATDomeCsc(salobj.BaseCsc):
             await self.run_command("OP")
             amount = 100
         else:
-            if self.evt_mainDoorState.data.state not in (
+            if self.evt_dropoutDoorState.data.state not in (
                     SALPY_ATDome.ATDome_shared_ShutterDoorState_ClosedState,
                     SALPY_ATDome.ATDome_shared_ShutterDoorState_OpenedState):
                 raise salobj.ExpectedError("Cannot close the main door "
@@ -333,6 +333,7 @@ class ATDomeCsc(salobj.BaseCsc):
             port=port,
             connectionTimeout=connection_timeout,
             readTimeout=read_timeout,
+            force_output=True,
         )
 
     async def connect(self):
