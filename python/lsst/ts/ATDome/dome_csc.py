@@ -76,10 +76,17 @@ class ATDomeCsc(salobj.BaseCsc):
 
     Notes
     -----
+    **Simulation Modes**
+
     Supported simulation modes:
 
     * 0: regular operation
     * 1: simulation mode: start a mock TCP/IP ATDome controller and talk to it
+
+    **Error Codes**
+
+    * 1: could not connect to TCP/IP ATDome controller
+    * 2: read from TCP/IP ATDome controller timed out
     """
     def __init__(self, index, initial_state=salobj.State.STANDBY, initial_simulation_mode=0):
         self.reader = None
@@ -200,7 +207,7 @@ class ATDomeCsc(salobj.BaseCsc):
                 self.log.exception(err_msg)
                 await self.disconnect()
                 self.summary_state = salobj.State.FAULT
-                self.evt_errorCode.set_put(errorCode=1, errorReport=f"{err_msg}: {e}", force_output=True)
+                self.evt_errorCode.set_put(errorCode=2, errorReport=f"{err_msg}: {e}", force_output=True)
                 return
 
             data = read_bytes.decode()
