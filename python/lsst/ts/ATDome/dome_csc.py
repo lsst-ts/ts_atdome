@@ -66,14 +66,20 @@ class ATDomeCsc(salobj.BaseCsc):
         as real CSCs should start up in `State.STANDBY`, the default.
     initial_simulation_mode : `int` (optional)
         Initial simulation mode.
-        The only allowed value is 1: simulating.
 
     Raises
     ------
     salobj.ExpectedError
         If initial_state or initial_simulation_mode is invalid.
+
+    Notes
+    -----
+    Supported simulation modes:
+
+    * 0: regular operation
+    * 1: simulation mode: start a mock TCP/IP ATDome controller and talk to it
     """
-    def __init__(self, index, initial_state=salobj.State.STANDBY, initial_simulation_mode=1):
+    def __init__(self, index, initial_state=salobj.State.STANDBY, initial_simulation_mode=0):
         self.reader = None
         self.writer = None
         self.cmd_queue = asyncio.Queue()
@@ -422,20 +428,18 @@ class ATDomeCsc(salobj.BaseCsc):
         self.is_first_status = False
 
     async def implement_simulation_mode(self, simulation_mode):
-        if simulation_mode != 1:
+        if simulation_mode not in (0, 1):
             raise salobj.ExpectedError(
-                f"This CSC only supports simulation; simulation_mode={simulation_mode} but must be 1")
+                f"Simulation_mode={simulation_mode} must be 0 or 1")
 
         if self.simulation_mode == simulation_mode:
             return
 
         await self.disconnect()
+        await self.stop_mock_ctrl()
         if simulation_mode == 1:
-            await self.stop_mock_ctrl()
             self.mock_ctrl = MockDomeController(port=self.port)
             await asyncio.wait_for(self.mock_ctrl.start(), timeout=2)
-        else:
-            self.mock_ctrl = None
         if self.want_connection:
             await self.connect()
 

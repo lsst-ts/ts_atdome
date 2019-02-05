@@ -6,7 +6,7 @@
 lsst.ts.ATDome
 ##############
 
-A simulator for the LSST ATDome CSC.
+Controller for the LSST auxiliary telescope dome (ATDome).
 
 .. _lsst.ts.ATDome-using:
 
@@ -38,7 +38,7 @@ The primary classes are:
 * `ATDomeCsc`: a simulator for the ATDome CSC.
 * `MockDomeController`: a simulator for the ATDome TCP/IP interface.
 
-Run the `ATDomeCsc` simulator  using ``bin/run_atdome_simulator.py`` (which only exists after you build the package).
+Run the ``ATDome`` controller  using ``bin/run_atdome.py`` (which only exists after you build the package).
 
 .. _building single package docs: https://developer.lsst.io/stack/building-single-package-docs.html
 
@@ -52,7 +52,7 @@ Run the `ATDomeCsc` simulator  using ``bin/run_atdome_simulator.py`` (which only
 Contributing
 ============
 
-``lsst.ts.ATDome`` is developed at https://github.com/lsst-ts/ts_ATDomeSimulator.
+``lsst.ts.ATDome`` is developed at https://github.com/lsst-ts/ts_ATDome.
 
 .. .. toctree::
 ..    :maxdepth: 1
