@@ -36,12 +36,12 @@ port_generator = salobj.index_generator(imin=3200)
 class Harness:
     def __init__(self, initial_state):
         salobj.test_utils.set_random_lsst_dds_domain()
-        self.port = next(port_generator)
         self.index = 1
         self.remote = salobj.Remote(SALPY_ATDome, index=self.index)
         self.csc = ATDome.ATDomeCsc(
-            index=self.index, port=self.port,
+            index=self.index,
             initial_state=initial_state, initial_simulation_mode=1)
+        self.csc.port = next(port_generator)
 
     async def stop(self):
         await asyncio.wait_for(self.csc.stop(), timeout=2)

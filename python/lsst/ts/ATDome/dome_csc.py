@@ -73,9 +73,7 @@ class ATDomeCsc(salobj.BaseCsc):
     salobj.ExpectedError
         If initial_state or initial_simulation_mode is invalid.
     """
-    def __init__(self, index, port, initial_state=salobj.State.STANDBY, initial_simulation_mode=1):
-        self.host = "127.0.0.1"
-        self.port = port
+    def __init__(self, index, initial_state=salobj.State.STANDBY, initial_simulation_mode=1):
         self.reader = None
         self.writer = None
         self.cmd_queue = asyncio.Queue()
@@ -87,6 +85,7 @@ class ATDomeCsc(salobj.BaseCsc):
         self.short_per_full = 5  # number of short status between full status
         self.az_tolerance = Angle(0.2, u.deg)  # tolerance for "in position"
         self.status_sleep_task = None  # sleep in status_loop
+        self.configure()
         super().__init__(SALPY_ATDome, index=index, initial_state=initial_state,
                          initial_simulation_mode=initial_simulation_mode)
         # initialize commanded positions
@@ -278,6 +277,28 @@ class ATDomeCsc(salobj.BaseCsc):
             raise RuntimeError(f"Could not parse main door state from move_code={move_code}")
         return door_state
 
+    def configure(self, host="127.0.0.1", port=3210, readTimeout=5, writeTimeout=5, connectionTimeout=5):
+        """Configure the CSC.
+
+        Parameters
+        ----------
+        host : `str`
+            Host IP address of ATDome TCP/IP controller
+        port : `int`
+            Port of ATDome TCP/IP controller
+        readTimeout : `float`
+            Time limit for TCP/IP read (sec)
+        writeTimeout : `float`
+            Time limit for TCP/IP write (sec)
+        connectionTimeout : `float`
+            Time limit for TCP/IP connection (sec)
+        """
+        self.port = port
+        self.host = host
+        self.readTimeout = readTimeout
+        self.writeTimeout = writeTimeout
+        self.connectionTimeout = connectionTimeout
+
     async def connect(self):
         """Connect to the dome controller's TCP/IP port.
         """
@@ -445,12 +466,12 @@ class ATDomeCsc(salobj.BaseCsc):
             self.n_short_status += 1
             await asyncio.sleep(self.status_interval)
 
-    async def stop(self):
+    async def stop(self, exception=None):
         """Disconnect from the TCP/IP controller and stop the CSC.
         """
         await self.disconnect()
         await self.stop_mock_ctrl()
-        await super().stop()
+        await super().stop(exception=exception)
 
     async def stop_mock_ctrl(self):
         """Stop the mock controller, if present.
