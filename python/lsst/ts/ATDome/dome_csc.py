@@ -84,15 +84,15 @@ class ATDomeCsc(salobj.BaseCsc):
     def __init__(self, index, initial_state=salobj.State.STANDBY, initial_simulation_mode=0):
         self.reader = None
         self.writer = None
-        self.cmd_queue = asyncio.Queue()
         self.move_code = 0
         self.mock_ctrl = None  # mock controller, or None of not constructed
-        self.status_task = None
         self.status_interval = 0.2  # delay between short status commands (sec)
         self.n_short_status = 0
         self.short_per_full = 5  # number of short status between full status
         self.az_tolerance = Angle(0.2, u.deg)  # tolerance for "in position"
         self.status_sleep_task = None  # sleep in status_loop
+        self.connect_task = None  # wait while connecting
+        self.cmd_lock = asyncio.Lock()
         super().__init__(SALPY_ATDome, index=index, initial_state=initial_state,
                          initial_simulation_mode=initial_simulation_mode)
         self.configure()
@@ -108,54 +108,54 @@ class ATDomeCsc(salobj.BaseCsc):
         azimuth = id_data.data.azimuth
         if azimuth < 0 or azimuth > 360:
             raise salobj.ExpectedError(f"azimuth={azimuth} deg; must be in range [0, 360]")
-        await self.cmd_queue.put(f"{azimuth:0.3f} MV")
+        await self.run_command(f"{azimuth:0.3f} MV")
         self.tel_position.set_put(azimuthPositionSet=azimuth)
-        self.status_loop()
+        await self.run_one_status()
 
     async def do_closeShutter(self, id_data):
         self.assert_enabled("closeShutter")
-        await self.cmd_queue.put("SC")
+        await self.run_command("SC")
         self.tel_position.set_put(dropoutDoorOpeningPercentageSet=0,
                                   mainDoorOpeningPercentageSet=0)
-        self.status_loop()
+        await self.run_one_status()
 
     async def do_openShutter(self, id_data):
         self.assert_enabled("openShutter")
-        await self.cmd_queue.put("SO")
+        await self.run_command("SO")
         self.tel_position.set_put(dropoutDoorOpeningPercentageSet=100,
                                   mainDoorOpeningPercentageSet=100)
-        self.status_loop()
+        await self.run_one_status()
 
     async def do_stopMotion(self, id_data):
         self.assert_enabled("stopMotion")
-        await self.cmd_queue.put("ST")
-        self.status_loop()
+        await self.run_command("ST")
+        await self.run_one_status()
 
     async def do_homeAzimuth(self, id_data):
         self.assert_enabled("homeAzimuth")
         if self.evt_azimuthState.data.homing:
             raise salobj.ExpectedError("Already homing")
-        await self.cmd_queue.put("HM")
+        await self.run_command("HM")
         self.tel_position.set(azimuthPositionSet=math.nan)
-        self.status_loop()
+        await self.run_one_status()
 
     async def do_moveShutterDropoutDoor(self, id_data):
         self.assert_enabled("moveShutterDropoutDoor")
         if self.evt_mainDoorState.data.state != SALPY_ATDome.ATDome_shared_ShutterDoorState_OpenedState:
             raise salobj.ExpectedError("Cannot move the dropout door until the main door is fully open.")
         if id_data.data.open:
-            await self.cmd_queue.put("DN")
+            await self.run_command("DN")
             amount = 100
         else:
-            await self.cmd_queue.put("UP")
+            await self.run_command("UP")
             amount = 0
         self.tel_position.set(dropoutDoorOpeningPercentageSet=amount)
-        self.status_loop()
+        await self.run_one_status()
 
     async def do_moveShutterMainDoor(self, id_data):
         self.assert_enabled("moveShutterMainDoor")
         if id_data.data.open:
-            await self.cmd_queue.put("OP")
+            await self.run_command("OP")
             amount = 100
         else:
             if self.evt_mainDoorState.data.state not in (
@@ -163,14 +163,25 @@ class ATDomeCsc(salobj.BaseCsc):
                     SALPY_ATDome.ATDome_shared_ShutterDoorState_OpenedState):
                 raise salobj.ExpectedError("Cannot close the main door "
                                            "until the dropout door is fully closed or fully open.")
-            await self.cmd_queue.put("CL")
+            await self.run_command("CL")
             amount = 0
         self.tel_position.set_put(mainDoorOpeningPercentageSet=amount)
-        self.status_loop()
+        await self.run_one_status()
 
-    async def cmd_loop(self):
-        while self.connected:
-            cmd = await self.cmd_queue.get()
+    async def run_command(self, cmd):
+        """Send a command to the TCP/IP controller and process its replies.
+
+        Parameters
+        ----------
+        cmd : `str`
+            The command to send, e.g. "5.0 MV", "SO" or "?".
+        """
+        if not self.connected:
+            if self.want_connection and self.connect_task is not None and not self.connect_task.done():
+                await self.connect_task
+            else:
+                raise RuntimeError("Not connected and not trying to connect")
+        async with self.cmd_lock:
             self.writer.write(f"{cmd}\n".encode())
             await self.writer.drain()
             expected_lines = {  # excluding final ">" line
@@ -325,8 +336,9 @@ class ATDomeCsc(salobj.BaseCsc):
             raise RuntimeError("Already connected")
         try:
             host = _LOCAL_HOST if self.simulation_mode == 1 else self.host
-            coro = asyncio.open_connection(host=host, port=self.port)
-            self.reader, self.writer = await asyncio.wait_for(coro, timeout=self.connection_timeout)
+            self.connect_task = asyncio.open_connection(host=host, port=self.port)
+            self.reader, self.writer = await asyncio.wait_for(self.connect_task,
+                                                              timeout=self.connection_timeout)
             self.log.debug("connected")
         except Exception as e:
             err_msg = f"Could not open connection to host={self.host}, port={self.port}"
@@ -335,7 +347,6 @@ class ATDomeCsc(salobj.BaseCsc):
             self.evt_errorCode.set_put(errorCode=1, errorReport=f"{err_msg}: {e}", force_output=True)
             return
 
-        asyncio.ensure_future(self.cmd_loop())
         self.status_loop()
 
     @property
@@ -463,22 +474,28 @@ class ATDomeCsc(salobj.BaseCsc):
             else:
                 asyncio.ensure_future(self.disconnect())
 
+    async def run_one_status(self):
+        """Cancel the status loop, get short status, restart status loop.
+        """
+        if self.status_sleep_task is not None and not self.status_sleep_task.done():
+            self.status_sleep_task.cancel()
+        await self.run_command("+")
+        self.status_loop()
+
     def status_loop(self):
         """Read and report status from the TCP/IP controller.
         """
         if self.status_sleep_task and not self.status_sleep_task.done():
             self.status_sleep_task.cancel()
-        if self.cmd_queue.qsize() < 2:
-            asyncio.ensure_future(self._status_implementation())
-        self.status_sleep_task = asyncio.ensure_future(asyncio.sleep(self.status_interval))
+        self.status_sleep_task = asyncio.ensure_future(self._status_implementation())
 
     async def _status_implementation(self):
         while self.connected:
             if self.n_short_status % self.short_per_full == 0:
                 self.n_short_status = 0
-                await self.cmd_queue.put("+")
+                await self.run_command("+")
             else:
-                await self.cmd_queue.put("?")
+                await self.run_command("?")
             self.n_short_status += 1
             await asyncio.sleep(self.status_interval)
 
