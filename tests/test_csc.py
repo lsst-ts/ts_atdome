@@ -22,6 +22,9 @@ import asyncio
 import math
 import unittest
 
+from astropy.coordinates import Angle
+import astropy.units as u
+
 from lsst.ts import salobj
 from lsst.ts import ATDome
 
@@ -54,6 +57,7 @@ class CscTestCase(unittest.TestCase):
 
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=2)
             self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotionState)
+            self.assertFalse(az_state.homing)
 
             main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=2)
             self.assertEqual(main_door_state.state, SALPY_ATDome.ATDome_shared_ShutterDoorState_ClosedState)
@@ -64,14 +68,68 @@ class CscTestCase(unittest.TestCase):
             self.assertFalse(emergency_stop.active)
 
             position = await harness.remote.tel_position.next(flush=False, timeout=2)
-            self.assertEqual(position.dropoutOpeningPercentage, 0)
+            self.assertEqual(position.dropoutDoorOpeningPercentage, 0)
             self.assertEqual(position.mainDoorOpeningPercentage, 0)
             self.assertAlmostEqual(position.azimuthPosition, 0)
-            self.assertTrue(math.isnan(position.dropoutOpeningPercentageSet))
+            self.assertTrue(math.isnan(position.dropoutDoorOpeningPercentageSet))
             self.assertTrue(math.isnan(position.mainDoorOpeningPercentageSet))
             self.assertTrue(math.isnan(position.azimuthPositionSet))
 
             await harness.stop()
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_home(self):
+        async def doit():
+            harness = Harness(initial_state=salobj.State.ENABLED)
+
+            state = await harness.remote.evt_summaryState.next(flush=False, timeout=5)
+            self.assertEqual(state.summaryState, salobj.State.ENABLED)
+            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=2)
+            self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotionState)
+            self.assertFalse(az_state.homing)
+
+            # set home azimuth near current position so homing goes quickly
+            curr_az = harness.csc.mock_ctrl.az_actuator.curr_pos
+            home_azimuth = (curr_az - 2*u.deg).wrap_at(Angle(360, u.deg))
+            harness.csc.mock_ctrl.home_az = home_azimuth
+
+            await harness.remote.cmd_homeAzimuth.start(timeout=2)
+
+            # wait for homing to begin and check status
+            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=1)
+            self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_MovingCCWState)
+            self.assertTrue(az_state.homing)
+            position = harness.remote.tel_position.get()
+            self.assertGreater(position.azimuthPosition, home_azimuth.deg)
+            self.assertTrue(math.isnan(position.azimuthPositionSet))
+
+            # check that moveAzimuth is disallowed while homing
+            harness.remote.cmd_moveAzimuth.set(azimuth=0)  # arbitrary
+            with salobj.assertRaisesAckError():
+                await harness.remote.cmd_moveAzimuth.start(timeout=2)
+
+            # check that homing is disallowed while homing
+            harness.remote.cmd_moveAzimuth.set(azimuth=0)  # arbitrary
+            with salobj.assertRaisesAckError():
+                await harness.remote.cmd_homeAzimuth.start(timeout=2)
+
+            # wait for the initial CCW homing move to finish
+            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=1)
+            self.assertTrue(az_state.homing)
+            self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_MovingCWState)
+            self.assertAlmostEqual(harness.csc.mock_ctrl.az_actuator.speed.deg,
+                                   harness.csc.mock_ctrl.home_az_vel.deg)
+
+            # wait for the slow CW homing move to finish
+            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=1)
+            self.assertFalse(az_state.homing)
+            self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotionState)
+            self.assertAlmostEqual(harness.csc.mock_ctrl.az_actuator.speed.deg,
+                                   harness.csc.mock_ctrl.az_vel.deg)
+            position = harness.remote.tel_position.get()
+            self.assertAlmostEqual(position.azimuthPosition, home_azimuth.deg)
+            self.assertTrue(math.isnan(position.azimuthPositionSet))
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -82,6 +140,7 @@ class CscTestCase(unittest.TestCase):
             self.assertEqual(state.summaryState, salobj.State.ENABLED)
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=2)
             self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotionState)
+            self.assertFalse(az_state.homing)
 
             desired_azimuth = 354
             harness.remote.cmd_moveAzimuth.set(azimuth=desired_azimuth)
@@ -90,6 +149,7 @@ class CscTestCase(unittest.TestCase):
             # wait for the move to begin and check status
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=1)
             self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_MovingCCWState)
+            self.assertFalse(az_state.homing)
             position = harness.remote.tel_position.get()
             self.assertAlmostEqual(position.azimuthPositionSet, desired_azimuth)
             self.assertGreater(position.azimuthPosition, desired_azimuth)
@@ -98,6 +158,7 @@ class CscTestCase(unittest.TestCase):
             # wait for the move to end and check status
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=1)
             self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotionState)
+            self.assertFalse(az_state.homing)
             position = harness.remote.tel_position.get()
             self.assertAlmostEqual(position.azimuthPositionSet, desired_azimuth)
             self.assertAlmostEqual(position.azimuthPosition, desired_azimuth)
@@ -183,6 +244,7 @@ class CscTestCase(unittest.TestCase):
             self.assertEqual(state.summaryState, salobj.State.ENABLED)
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=1)
             self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotionState)
+            self.assertFalse(az_state.homing)
             main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=2)
             self.assertEqual(main_door_state.state,
                              SALPY_ATDome.ATDome_shared_ShutterDoorState_ClosedState)
@@ -198,6 +260,7 @@ class CscTestCase(unittest.TestCase):
             # wait for the moves to start
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=1)
             self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_MovingCCWState)
+            self.assertFalse(az_state.homing)
             az_in_position = await harness.remote.evt_azimuthInPosition.next(flush=False, timeout=1)
             self.assertFalse(az_in_position.inPosition)
             main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=2)
@@ -216,6 +279,7 @@ class CscTestCase(unittest.TestCase):
 
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=1)
             self.assertEqual(az_state.state, SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotionState)
+            self.assertFalse(az_state.homing)
             with self.assertRaises(asyncio.TimeoutError):
                 await harness.remote.evt_azimuthInPosition.next(flush=False, timeout=0.1)
             main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=2)

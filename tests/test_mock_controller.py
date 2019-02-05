@@ -21,6 +21,9 @@
 import asyncio
 import unittest
 
+from astropy.coordinates import Angle
+import astropy.units as u
+
 from lsst.ts import salobj
 from lsst.ts import ATDome
 
@@ -96,7 +99,7 @@ class MockTestCase(unittest.TestCase):
             self.assertTrue(rem_status.rain_sensor_enabled)
             self.assertTrue(rem_status.cloud_sensor_enabled)
             self.assertAlmostEqual(rem_status.tolerance.deg, 1)
-            self.assertAlmostEqual(rem_status.home_azimuth.deg, self.ctrl.home_azimuth)
+            self.assertAlmostEqual(rem_status.home_azimuth.deg, self.ctrl.home_az.deg)
             self.assertAlmostEqual(rem_status.high_speed.deg, 6)
             self.assertAlmostEqual(rem_status.watchdog_timer, 600)
             self.assertAlmostEqual(rem_status.reversal_delay, 2)
@@ -107,7 +110,7 @@ class MockTestCase(unittest.TestCase):
         async def doit():
             daz = -3
             az = 360 + daz
-            est_duration = abs(daz / self.ctrl.az_vel)
+            est_duration = abs(daz / self.ctrl.az_vel.deg)
             reply_lines = await self.send_cmd(f"{az:0.2f} MV")
             self.assertEqual(reply_lines, [""])
             await asyncio.sleep(est_duration/2)
@@ -123,6 +126,41 @@ class MockTestCase(unittest.TestCase):
             status = ATDome.ShortStatus(reply_lines)
             self.assertAlmostEqual(status.az_pos.deg, 357)
             self.assertEqual(status.move_code, 0)
+
+        asyncio.get_event_loop().run_until_complete(doit())
+
+    def test_home_az(self):
+        async def doit():
+            daz = -2
+            est_ccw_duration = abs(daz / self.ctrl.az_vel.deg)
+            curr_az = self.ctrl.az_actuator.curr_pos
+            home_azimuth = (curr_az - 2*u.deg).wrap_at(Angle(360, u.deg))
+            self.ctrl.home_az = home_azimuth
+
+            reply_lines = await self.send_cmd("HM")
+            self.assertEqual(reply_lines, [""])
+
+            # sleep until halfway through CCW motion and check status
+            await asyncio.sleep(est_ccw_duration/2)
+            reply_lines = await self.send_cmd("?")
+            status = ATDome.ShortStatus(reply_lines)
+            self.assertEqual(status.move_code, 2 + 64)
+            self.assertAlmostEqual(self.ctrl.az_actuator.speed.deg, self.ctrl.az_vel.deg)
+
+            # sleep until halfway through CW motion and check status
+            await asyncio.sleep(self.ctrl.az_actuator.remaining_time + est_ccw_duration/2)
+            reply_lines = await self.send_cmd("?")
+            status = ATDome.ShortStatus(reply_lines)
+            self.assertEqual(status.move_code, 1 + 64)
+            self.assertAlmostEqual(self.ctrl.az_actuator.speed.deg, self.ctrl.home_az_vel.deg)
+
+            # sleep until we're done and check status
+            await asyncio.sleep(self.ctrl.az_actuator.remaining_time + 0.1)
+            reply_lines = await self.send_cmd("?")
+            status = ATDome.ShortStatus(reply_lines)
+            self.assertEqual(status.move_code, 0)
+            self.assertAlmostEqual(self.ctrl.az_actuator.speed.deg, self.ctrl.az_vel.deg)
+            self.assertAlmostEqual(self.ctrl.az_actuator.curr_pos.deg, self.ctrl.home_az.deg)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -259,7 +297,7 @@ class MockTestCase(unittest.TestCase):
             az = daz
 
             # start azimuth motion
-            reply_lines = await self.send_cmd(f"{az:0.2f} MV")
+            reply_lines = await self.send_cmd(f"{az.deg:0.2f} MV")
             # open both doors
             reply_lines = await self.send_cmd("SO")
             self.assertEqual(reply_lines, [""])
@@ -269,7 +307,7 @@ class MockTestCase(unittest.TestCase):
             reply_lines = await self.send_cmd("ST")
             reply_lines = await self.send_cmd("?")
             status = ATDome.ShortStatus(reply_lines)
-            self.assertLess(status.az_pos.deg, az)
+            self.assertLess(status.az_pos.deg, az.deg)
             self.assertGreater(status.az_pos.deg, 0)
             self.assertLess(status.main_door_pct, 100)
             self.assertGreater(status.main_door_pct, 0)

@@ -102,6 +102,12 @@ class Actuator:
         self._end_pos = curr_pos
         self._end_time = curr_time
 
+    @property
+    def remaining_time(self):
+        """Remaining time for this move (sec)."""
+        duration = self._end_time - time.time()
+        return max(duration, 0)
+
 
 class AzActuator(Actuator):
     """Model the Dome azimuth actuator.
@@ -141,6 +147,14 @@ class MockDomeController:
         Time to open or close either door (sec)
     az_vel : `float`
         Azimuth velocity (deg/sec)
+    home_az : `float`
+        Azimuth home position (deg)
+    home_az_overshoot : `float`
+        Distance to move CCW past the home switch at full speed while homing,
+        before coming back slowly (deg)
+    home_az_vel : `float`
+        Final velocity for azimuth homing,
+        once the home switch has been contacted at full speed (deg/sec)
 
     Notes
     -----
@@ -160,17 +174,19 @@ class MockDomeController:
     * Encoder counts are not supported; reported values are bogus.
     * Door sequencing is not supported; doors move as if independent.
     """
-    def __init__(self, port, door_time=1, az_vel=6):
+    def __init__(self, port, door_time=1, az_vel=6, home_az=10, home_az_overshoot=1, home_az_vel=1):
         self.port = port
-        self.door_time = door_time  # seconds to open or close the doors
-        self.az_vel = az_vel  # azimuth velocity, deg/sec
-        self.home_az = Angle(0, u.deg)
+        self.door_time = door_time
+        self.az_vel = Angle(az_vel, u.deg)
+        self.home_az = Angle(10, u.deg)
+        self.home_az_overshoot = Angle(home_az_overshoot, u.deg)
+        self.home_az_vel = Angle(home_az_vel, u.deg)
         self.az_actuator = AzActuator(pos=0, speed=az_vel)
         self.door_actuators = dict((enum, Actuator(min_pos=0, max_pos=100, pos=0,
                                                    speed=100/door_time)) for enum in Door)
 
+        self._homing_task = None
         self._homing = False
-        self.home_azimuth = 90
         self.rain_enabled = True
         self.rain_detected = False
         self.clouds_enabled = True
@@ -223,10 +239,11 @@ class MockDomeController:
 
     @property
     def homing(self):
-        if self._homing and self.az_actuator.moving:
-            return True
-        self._homing = False
-        return False
+        return self._homing_task is not None and not self._homing_task.done()
+
+    def cancel_homing(self):
+        if self.homing:
+            self._homing_task.cancel()
 
     async def cmd_loop(self, reader, writer):
         self.log.info("cmd_loop begins")
@@ -294,10 +311,8 @@ class MockDomeController:
     def do_home(self):
         """Rotate azimuth to the home position.
         """
-        self._homing = True
-        self.set_cmd_az(self.home_az)
-
-        self.az_actuator.set_pos(self.home_az)
+        self.cancel_homing()
+        self._homing_task = asyncio.ensure_future(self.implement_home())
 
     def do_set_cmd_az(self, data):
         """Set commanded azimuth position.
@@ -358,7 +373,7 @@ class MockDomeController:
         outputs = self.do_short_status()
         outputs.append(f"Emergency Stop Active: {1 if self.estop_active else 0}")
         outputs.append(f"SCB radio link OK:    {1 if self.scb_link_ok else 0}")
-        outputs.append(f"Home Azimuth: {self.home_azimuth:05.2f}")
+        outputs.append(f"Home Azimuth: {self.home_az.deg:05.2f}")
         outputs.append(f"High Speed (degrees): {self.az_vel:05.2f}")
         outputs.append("Coast (degrees): 0.20")
         outputs.append("Tolerance (degrees): 1.00")
@@ -391,3 +406,15 @@ class MockDomeController:
         """
         self.az_actuator.set_pos(cmd_az)
         self.last_rot_right = True if self.az_actuator.direction == 1 else False
+
+    async def implement_home(self):
+        """Home the azimuth axis."""
+        try:
+            self.set_cmd_az(self.home_az - self.home_az_overshoot)
+            await asyncio.sleep(self.az_actuator.remaining_time)
+            self.az_actuator.speed = self.home_az_vel
+            self.set_cmd_az(self.home_az)
+            await asyncio.sleep(self.az_actuator.remaining_time)
+        finally:
+            self.az_actuator.speed = self.az_vel
+            self._homing = False

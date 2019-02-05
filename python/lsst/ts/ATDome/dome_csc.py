@@ -70,7 +70,7 @@ class ATDomeCsc(salobj.BaseCsc):
 
     Raises
     ------
-    salobj.ExpectedException
+    salobj.ExpectedError
         If initial_state or initial_simulation_mode is invalid.
     """
     def __init__(self, index, port, initial_state=salobj.State.STANDBY, initial_simulation_mode=1):
@@ -91,11 +91,13 @@ class ATDomeCsc(salobj.BaseCsc):
                          initial_simulation_mode=initial_simulation_mode)
         # initialize commanded positions
         self.tel_position.set(azimuthPositionSet=math.nan,
-                              dropoutOpeningPercentageSet=math.nan,
+                              dropoutDoorOpeningPercentageSet=math.nan,
                               mainDoorOpeningPercentageSet=math.nan)
 
     async def do_moveAzimuth(self, id_data):
         self.assert_enabled("moveAzimuth")
+        if self.evt_azimuthState.data.homing:
+            raise salobj.ExpectedError("Cannot move azimuth while homing")
         azimuth = id_data.data.azimuth
         if azimuth < 0 or azimuth > 360:
             raise salobj.ExpectedError(f"azimuth={azimuth} deg; must be in range [0, 360]")
@@ -106,14 +108,14 @@ class ATDomeCsc(salobj.BaseCsc):
     async def do_closeShutter(self, id_data):
         self.assert_enabled("closeShutter")
         await self.cmd_queue.put("SC")
-        self.tel_position.set_put(dropoutOpeningPercentageSet=0,
+        self.tel_position.set_put(dropoutDoorOpeningPercentageSet=0,
                                   mainDoorOpeningPercentageSet=0)
         self.status_loop()
 
     async def do_openShutter(self, id_data):
         self.assert_enabled("openShutter")
         await self.cmd_queue.put("SO")
-        self.tel_position.set_put(dropoutOpeningPercentageSet=100,
+        self.tel_position.set_put(dropoutDoorOpeningPercentageSet=100,
                                   mainDoorOpeningPercentageSet=100)
         self.status_loop()
 
@@ -124,18 +126,23 @@ class ATDomeCsc(salobj.BaseCsc):
 
     async def do_homeAzimuth(self, id_data):
         self.assert_enabled("homeAzimuth")
-        raise NotImplementedError()
+        if self.evt_azimuthState.data.homing:
+            raise salobj.ExpectedError("Already homing")
+        await self.cmd_queue.put("HM")
+        self.tel_position.set(azimuthPositionSet=math.nan)
         self.status_loop()
 
     async def do_moveShutterDropoutDoor(self, id_data):
         self.assert_enabled("moveShutterDropoutDoor")
+        if self.evt_mainDoorState.data.state != SALPY_ATDome.ATDome_shared_ShutterDoorState_OpenedState:
+            raise salobj.ExpectedError("Cannot move the dropout door until the main door is fully open.")
         if id_data.data.open:
             await self.cmd_queue.put("DN")
             amount = 100
         else:
             await self.cmd_queue.put("UP")
             amount = 0
-        self.tel_position.set_put(dropoutOpeningPercentageSet=amount)
+        self.tel_position.set(dropoutDoorOpeningPercentageSet=amount)
         self.status_loop()
 
     async def do_moveShutterMainDoor(self, id_data):
@@ -144,6 +151,11 @@ class ATDomeCsc(salobj.BaseCsc):
             await self.cmd_queue.put("OP")
             amount = 100
         else:
+            if self.evt_mainDoorState.data.state not in (
+                    SALPY_ATDome.ATDome_shared_ShutterDoorState_ClosedState,
+                    SALPY_ATDome.ATDome_shared_ShutterDoorState_OpenedState):
+                raise salobj.ExpectedError("Cannot close the main door "
+                                           "until the dropout door is fully closed or fully open.")
             await self.cmd_queue.put("CL")
             amount = 0
         self.tel_position.set_put(mainDoorOpeningPercentageSet=amount)
@@ -208,29 +220,32 @@ class ATDomeCsc(salobj.BaseCsc):
             mask |= Axis.MainDoor
 
         dropout_halted = move_code & (MoveCode.DropoutDoorClosing | MoveCode.DropoutDoorOpening) == 0
-        if dropout_halted and self.tel_position.data.dropoutOpeningPercentage == \
-                self.tel_position.data.dropoutOpeningPercentageSet:
+        if dropout_halted and self.tel_position.data.dropoutDoorOpeningPercentage == \
+                self.tel_position.data.dropoutDoorOpeningPercentageSet:
             mask |= Axis.DropoutDoor
 
         return mask
 
     def compute_az_state(self, move_code):
-        """Compute azimuth state.
-
-        This is alarmingly similar to azimuth move direction.
+        """Compute the state field for the azimuthState event.
 
         Parameters
         ----------
         move_code : `int`
             Motion code: the integer from line 5 of short status.
+
+        Returns
+        -------
+        state : `int`
+            The appropriate ``AzimuthState`` enum value.
         """
         if move_code & MoveCode.AzPositive:
-            status = SALPY_ATDome.ATDome_shared_AzimuthState_MovingCWState
+            state = SALPY_ATDome.ATDome_shared_AzimuthState_MovingCWState
         elif move_code & MoveCode.AzNegative:
-            status = SALPY_ATDome.ATDome_shared_AzimuthState_MovingCCWState
+            state = SALPY_ATDome.ATDome_shared_AzimuthState_MovingCCWState
         else:
-            status = SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotionState
-        return status
+            state = SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotionState
+        return state
 
     def compute_door_state(self, open_pct, is_main, move_code):
         """Compute data for the shutterState event.
@@ -321,17 +336,19 @@ class ATDomeCsc(salobj.BaseCsc):
         status = ShortStatus(lines)
 
         self.tel_position.data.mainDoorOpeningPercentage = status.main_door_pct
-        self.tel_position.data.dropoutOpeningPercentage = status.dropout_door_pct
+        self.tel_position.data.dropoutDoorOpeningPercentage = status.dropout_door_pct
         settings_updated = self.evt_settingsAppliedDomeController.set(
             autoShutdownEnabled=status.auto_shutdown_enabled)
 
         self.tel_position.set_put(azimuthPosition=status.az_pos.deg)
 
         move_code = status.move_code
-        self.evt_azimuthState.set_put(state=self.compute_az_state(move_code))
+        self.evt_azimuthState.set_put(
+            state=self.compute_az_state(move_code),
+            homing=bool(move_code & MoveCode.Homing))
 
         dropout_door_state = self.compute_door_state(
-            open_pct=self.tel_position.data.dropoutOpeningPercentage,
+            open_pct=self.tel_position.data.dropoutDoorOpeningPercentage,
             is_main=False,
             move_code=move_code)
         main_door_state = self.compute_door_state(
