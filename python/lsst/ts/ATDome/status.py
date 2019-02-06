@@ -89,6 +89,10 @@ class RemainingStatus:
         assert tolerance_match
         self.tolerance = Angle(float(tolerance_match.group(1)), u.deg)
 
+        home_azimuth = re.match(r"Home Azimuth: +(\d*\.?\d+)", lines[7])
+        assert home_azimuth
+        self.home_azimuth = Angle(float(home_azimuth.group(1)), u.deg)
+
         high_speed_match = re.match(r"High Speed \(degrees\): +(\d*\.?\d+)", lines[8])
         assert high_speed_match
         self.high_speed = Angle(float(high_speed_match.group(1)), u.deg)

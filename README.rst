@@ -2,12 +2,12 @@
 ts_ATDome
 #########
 
-``ts_ATDome`` is a package in the `LSST Science Pipelines <https://pipelines.lsst.io>`_.
+``ts_ATDome`` is an LSST Telescope and Site package that implements the auxiliary telescope dome (ATDome) controller.
 
 The primary classes are:
 
-* ``ATDomeCsc``: a simulator for the ATDome CSC.
-* ``MockDomeController``: a simulator for the ATDome TCP/IP interface.
+* ``ATDomeCsc``: controller for the auxiliary telescope dome.
+* ``MockDomeController``:  simulator for the auxiliary telescope dome TCP/IP interface.
 
 The package is compatible with LSST DM's ``scons`` build system and ``eups`` package management system.
 Assuming you have the basic LSST DM stack installed you can do the following, from within the package directory:

@@ -21,5 +21,5 @@ import asyncio
 
 from lsst.ts import ATDome
 
-csc = ATDome.ATDomeCsc.main(port=3210, index=1)
+csc = ATDome.ATDomeCsc.main(index=1)
 asyncio.get_event_loop().run_until_complete(csc.done_task)
