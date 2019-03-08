@@ -306,7 +306,8 @@ class CscTestCase(unittest.TestCase):
             self.assertEqual(dropout_door_state.state,
                              SALPY_ATDome.ATDome_shared_ShutterDoorState_Opening)
 
-            # make sure we can't close the main door while the dropout door is moving
+            # make sure we can't close the main door
+            # while the dropout door is moving
             harness.remote.cmd_moveShutterMainDoor.set(open=False)
             with salobj.assertRaisesAckError():
                 await harness.remote.cmd_moveShutterMainDoor.start(timeout=2)
@@ -349,7 +350,8 @@ class CscTestCase(unittest.TestCase):
             shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False, timeout=1)
             self.assertTrue(shutter_in_pos.inPosition)
 
-            # open the main door again and this time close the dropout door once we are there
+            # open the main door again and this time
+            # close the dropout door once we are there
             harness.remote.cmd_moveShutterMainDoor.set(open=True)
             await harness.remote.cmd_moveShutterMainDoor.start(timeout=2)
             main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=1)
@@ -372,7 +374,8 @@ class CscTestCase(unittest.TestCase):
             shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False, timeout=1)
             self.assertFalse(shutter_in_pos.inPosition)
 
-            # make sure we can't close the main door while the dropout door is moving
+            # make sure we can't close the main door
+            # while the dropout door is moving
             harness.remote.cmd_moveShutterMainDoor.set(open=False)
             with salobj.assertRaisesAckError():
                 await harness.remote.cmd_moveShutterMainDoor.start(timeout=2)
