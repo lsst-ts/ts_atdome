@@ -195,7 +195,7 @@ class MockDomeController:
         self.auto_shutdown_enabled = True
         self.estop_active = False
 
-        self.last_rot_right = False
+        self.last_rot_right = None
         self.log = logging.getLogger("MockDomeController")
         self._server = None
 
@@ -355,9 +355,14 @@ class MockDomeController:
         az_moving = self.az_actuator.moving
         curr_az = self.az_actuator.curr_pos
         outputs.append(f"Posn {curr_az.deg:0.2f}")
-        dir_code = "RR" if self.last_rot_right else "RL"
+        if self.last_rot_right is None:
+            dir_code = "??"
+        elif self.last_rot_right:
+            dir_code = "RR"
+        else:
+            dir_code = "RL"
         if az_moving:
-            if self.last_rot_right > 0:
+            if self.last_rot_right:
                 move_code += 1
             else:
                 move_code += 2

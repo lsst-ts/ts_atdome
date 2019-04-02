@@ -53,7 +53,7 @@ class ShortStatus:
         assert az_match
         self.az_pos = Angle(float(az_match.group(1)), u.deg)
 
-        code_match = re.match(r"R(L|R) +(\d+)", lines[4])
+        code_match = re.match(r"(RL|RR|\?\?) +(\d+)", lines[4])
         assert code_match
         move_code = int(code_match.group(2))
         self.move_code = move_code
