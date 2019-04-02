@@ -305,7 +305,7 @@ class ATDomeCsc(salobj.BaseCsc):
             raise RuntimeError(f"Could not parse main door state from move_code={move_code}")
         return door_state
 
-    def configure(self, host=_LOCAL_HOST, port=3210, connection_timeout=2, read_timeout=2):
+    def configure(self, host=_LOCAL_HOST, port=17310, connection_timeout=2, read_timeout=2):
         """Configure the CSC.
 
         Parameters
