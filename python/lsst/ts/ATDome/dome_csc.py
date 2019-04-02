@@ -61,8 +61,6 @@ class ATDomeCsc(salobj.BaseCsc):
     ----------
     index : `int` or `None`
         SAL component index, or 0 or None if the component is not indexed.
-    port : `int`
-        TCP/IP port for ATDome controller.
     initial_state : `salobj.State` or `int` (optional)
         The initial state of the CSC. This is provided for unit testing,
         as real CSCs should start up in `State.STANDBY`, the default.
