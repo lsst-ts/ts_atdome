@@ -36,25 +36,25 @@ class ShortStatus:
             raise RuntimeError(f"Got {len(lines)} lines; need 5")
 
         shutter_match = re.match(r"MAIN +[A-Z]+ +(\d+)", lines[0])
-        assert shutter_match
+        assert shutter_match, f"Could not parse short status line 1: {lines[0]}"
         self.main_door_pct = float(shutter_match.group(1))
 
         door_match = re.match(r"DROP +[A-Z]+ +(\d+)", lines[1])
-        assert door_match
+        assert door_match, f"Could not parse short status line 2: {lines[1]}"
         self.dropout_door_pct = float(door_match.group(1))
 
         auto_shutdown_match = re.match(r"\[(ON|OFF)\] +(\d+)", lines[2])
-        assert auto_shutdown_match
+        assert auto_shutdown_match, f"Could not parse short status line 3: {lines[2]}"
         self.auto_shutdown_enabled = auto_shutdown_match.group(1) == "ON"
 
         self.sensor_code = int(auto_shutdown_match.group(2))
 
         az_match = re.match(r"Posn +(\d*\.?\d+)", lines[3])
-        assert az_match
+        assert az_match, f"Could not parse short status line 4: {lines[3]}"
         self.az_pos = Angle(float(az_match.group(1)), u.deg)
 
         code_match = re.match(r"(RL|RR|\?\?) +(\d+)", lines[4])
-        assert code_match
+        assert code_match, f"Could not parse short status line 5: {lines[4]}"
         move_code = int(code_match.group(2))
         self.move_code = move_code
 
