@@ -56,6 +56,15 @@ class CscTestCase(unittest.TestCase):
             state = await harness.remote.evt_summaryState.next(flush=False, timeout=5)
             self.assertEqual(state.summaryState, salobj.State.ENABLED)
 
+            azimuthCmdState = await harness.remote.evt_azimuthCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(azimuthCmdState.commandedState, ATDome.AzimuthCommandedState.Unknown)
+            self.assertTrue(math.isnan(azimuthCmdState.azimuth))
+
+            dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
+            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
+
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=2)
             self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
             self.assertFalse(az_state.homing)
@@ -72,9 +81,6 @@ class CscTestCase(unittest.TestCase):
             self.assertEqual(position.dropoutDoorOpeningPercentage, 0)
             self.assertEqual(position.mainDoorOpeningPercentage, 0)
             self.assertAlmostEqual(position.azimuthPosition, 0)
-            self.assertTrue(math.isnan(position.dropoutDoorOpeningPercentageSet))
-            self.assertTrue(math.isnan(position.mainDoorOpeningPercentageSet))
-            self.assertTrue(math.isnan(position.azimuthPositionSet))
 
             tcp_settings = await harness.remote.evt_settingsAppliedDomeTcp.next(flush=False, timeout=2)
             self.assertEqual(tcp_settings.host, "127.0.0.1")
@@ -93,6 +99,11 @@ class CscTestCase(unittest.TestCase):
 
             state = await harness.remote.evt_summaryState.next(flush=False, timeout=5)
             self.assertEqual(state.summaryState, salobj.State.ENABLED)
+
+            cmdState = await harness.remote.evt_azimuthCommandedState.next(flush=False, timeout=1)
+            self.assertEqual(cmdState.commandedState, ATDome.AzimuthCommandedState.Unknown)
+            self.assertTrue(math.isnan(cmdState.azimuth))
+
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=2)
             self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
             self.assertFalse(az_state.homing)
@@ -105,12 +116,14 @@ class CscTestCase(unittest.TestCase):
             await harness.remote.cmd_homeAzimuth.start(timeout=2)
 
             # wait for homing to begin and check status
+            cmdState = await harness.remote.evt_azimuthCommandedState.next(flush=False, timeout=1)
+            self.assertEqual(cmdState.commandedState, ATDome.AzimuthCommandedState.Home)
+            self.assertTrue(math.isnan(cmdState.azimuth))
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=1)
             self.assertEqual(az_state.state, ATDome.AzimuthState.MovingCCW)
             self.assertTrue(az_state.homing)
             position = harness.remote.tel_position.get()
             self.assertGreater(position.azimuthPosition, home_azimuth.deg)
-            self.assertTrue(math.isnan(position.azimuthPositionSet))
 
             # check that moveAzimuth is disallowed while homing
             harness.remote.cmd_moveAzimuth.set(azimuth=0)  # arbitrary
@@ -137,7 +150,6 @@ class CscTestCase(unittest.TestCase):
                                    harness.csc.mock_ctrl.az_vel.deg)
             position = harness.remote.tel_position.get()
             self.assertAlmostEqual(position.azimuthPosition, home_azimuth.deg)
-            self.assertTrue(math.isnan(position.azimuthPositionSet))
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -146,6 +158,10 @@ class CscTestCase(unittest.TestCase):
             harness = Harness(initial_state=salobj.State.ENABLED)
             state = await harness.remote.evt_summaryState.next(flush=False, timeout=5)
             self.assertEqual(state.summaryState, salobj.State.ENABLED)
+            cmdState = await harness.remote.evt_azimuthCommandedState.next(flush=False, timeout=1)
+            self.assertEqual(cmdState.commandedState, ATDome.AzimuthCommandedState.Unknown)
+            self.assertTrue(math.isnan(cmdState.azimuth))
+
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=2)
             self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
             self.assertFalse(az_state.homing)
@@ -155,11 +171,13 @@ class CscTestCase(unittest.TestCase):
             await harness.remote.cmd_moveAzimuth.start(timeout=2)
 
             # wait for the move to begin and check status
+            cmdState = await harness.remote.evt_azimuthCommandedState.next(flush=False, timeout=1)
+            self.assertEqual(cmdState.commandedState, ATDome.AzimuthCommandedState.GoToPosition)
+            self.assertAlmostEqual(cmdState.azimuth, desired_azimuth)
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=1)
             self.assertEqual(az_state.state, ATDome.AzimuthState.MovingCCW)
             self.assertFalse(az_state.homing)
             position = harness.remote.tel_position.get()
-            self.assertAlmostEqual(position.azimuthPositionSet, desired_azimuth)
             self.assertGreater(position.azimuthPosition, desired_azimuth)
             self.assertLess(position.azimuthPosition, 360)
 
@@ -168,7 +186,6 @@ class CscTestCase(unittest.TestCase):
             self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
             self.assertFalse(az_state.homing)
             position = harness.remote.tel_position.get()
-            self.assertAlmostEqual(position.azimuthPositionSet, desired_azimuth)
             self.assertAlmostEqual(position.azimuthPosition, desired_azimuth)
 
             # try several invalid values for azimuth
@@ -186,6 +203,12 @@ class CscTestCase(unittest.TestCase):
             harness = Harness(initial_state=salobj.State.ENABLED)
             state = await harness.remote.evt_summaryState.next(flush=False, timeout=5)
             self.assertEqual(state.summaryState, salobj.State.ENABLED)
+
+            dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
+            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
+
             main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=2)
             self.assertEqual(main_door_state.state,
                              ATDome.ShutterDoorState.Closed)
@@ -197,7 +220,11 @@ class CscTestCase(unittest.TestCase):
             await harness.remote.cmd_openShutter.start(timeout=2)
 
             # wait for the move to begin and check status
-            self.assertEqual(state.summaryState, salobj.State.ENABLED)
+            dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
+            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
+
             main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=1)
             self.assertEqual(main_door_state.state,
                              ATDome.ShutterDoorState.Opening)
@@ -221,6 +248,11 @@ class CscTestCase(unittest.TestCase):
             await harness.remote.cmd_closeShutter.start(timeout=2)
 
             # wait for the move to begin and check status
+            dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Closed)
+            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Closed)
+
             self.assertEqual(state.summaryState, salobj.State.ENABLED)
             main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=1)
             self.assertEqual(main_door_state.state,
@@ -258,6 +290,12 @@ class CscTestCase(unittest.TestCase):
             harness = Harness(initial_state=salobj.State.ENABLED)
             state = await harness.remote.evt_summaryState.next(flush=False, timeout=5)
             self.assertEqual(state.summaryState, salobj.State.ENABLED)
+
+            dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
+            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
+
             main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=2)
             self.assertEqual(main_door_state.state,
                              ATDome.ShutterDoorState.Closed)
@@ -279,6 +317,9 @@ class CscTestCase(unittest.TestCase):
             await harness.remote.cmd_moveShutterMainDoor.start(timeout=2)
 
             # wait for the move to begin and check status
+            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
+
             main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=1)
             self.assertEqual(main_door_state.state,
                              ATDome.ShutterDoorState.Opening)
@@ -302,6 +343,10 @@ class CscTestCase(unittest.TestCase):
             # open the dropout door
             harness.remote.cmd_moveShutterDropoutDoor.set(open=True)
             await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=2)
+
+            dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
+
             dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False, timeout=1)
             self.assertEqual(dropout_door_state.state,
                              ATDome.ShutterDoorState.Opening)
@@ -316,6 +361,9 @@ class CscTestCase(unittest.TestCase):
             harness.remote.cmd_moveShutterMainDoor.set(open=True)
             await harness.remote.cmd_moveShutterMainDoor.start(timeout=2)
 
+            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
+
             # wait for the dropout door move to finish
             dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False, timeout=1)
             self.assertEqual(dropout_door_state.state,
@@ -327,6 +375,9 @@ class CscTestCase(unittest.TestCase):
             # close the main door
             harness.remote.cmd_moveShutterMainDoor.set(open=False)
             await harness.remote.cmd_moveShutterMainDoor.start(timeout=2)
+
+            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Closed)
 
             main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=1)
             self.assertEqual(main_door_state.state,
@@ -354,6 +405,10 @@ class CscTestCase(unittest.TestCase):
             # close the dropout door once we are there
             harness.remote.cmd_moveShutterMainDoor.set(open=True)
             await harness.remote.cmd_moveShutterMainDoor.start(timeout=2)
+
+            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
+
             main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=1)
             self.assertEqual(main_door_state.state,
                              ATDome.ShutterDoorState.Opening)
@@ -368,6 +423,10 @@ class CscTestCase(unittest.TestCase):
             # close the dropout door
             harness.remote.cmd_moveShutterDropoutDoor.set(open=False)
             await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=2)
+
+            dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Closed)
+
             dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False, timeout=1)
             self.assertEqual(dropout_door_state.state,
                              ATDome.ShutterDoorState.Closing)
@@ -390,6 +449,9 @@ class CscTestCase(unittest.TestCase):
             # close the main door
             harness.remote.cmd_moveShutterMainDoor.set(open=False)
             await harness.remote.cmd_moveShutterMainDoor.start(timeout=2)
+
+            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False, timeout=2)
+            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Closed)
 
             main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=1)
             self.assertEqual(main_door_state.state,
