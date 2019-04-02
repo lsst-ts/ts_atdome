@@ -28,6 +28,7 @@ from astropy.coordinates import Angle
 import astropy.units as u
 
 from lsst.ts import salobj
+from .sal_enums import AzimuthState, ShutterDoorState
 from .utils import angle_diff
 from .mock_controller import MockDomeController
 from .status import ShortStatus, RemainingStatus
@@ -146,7 +147,7 @@ class ATDomeCsc(salobj.BaseCsc):
 
     async def do_moveShutterDropoutDoor(self, id_data):
         self.assert_enabled("moveShutterDropoutDoor")
-        if self.evt_mainDoorState.data.state != SALPY_ATDome.ATDome_shared_ShutterDoorState_Opened:
+        if self.evt_mainDoorState.data.state != ShutterDoorState.Opened:
             raise salobj.ExpectedError("Cannot move the dropout door until the main door is fully open.")
         if id_data.data.open:
             await self.run_command("DN")
@@ -164,8 +165,8 @@ class ATDomeCsc(salobj.BaseCsc):
             amount = 100
         else:
             if self.evt_dropoutDoorState.data.state not in (
-                    SALPY_ATDome.ATDome_shared_ShutterDoorState_Closed,
-                    SALPY_ATDome.ATDome_shared_ShutterDoorState_Opened):
+                    ShutterDoorState.Closed,
+                    ShutterDoorState.Opened):
                 raise salobj.ExpectedError("Cannot close the main door "
                                            "until the dropout door is fully closed or fully open.")
             await self.run_command("CL")
@@ -267,11 +268,11 @@ class ATDomeCsc(salobj.BaseCsc):
             The appropriate ``AzimuthState`` enum value.
         """
         if move_code & MoveCode.AzPositive:
-            state = SALPY_ATDome.ATDome_shared_AzimuthState_MovingCW
+            state = AzimuthState.MovingCW
         elif move_code & MoveCode.AzNegative:
-            state = SALPY_ATDome.ATDome_shared_AzimuthState_MovingCCW
+            state = AzimuthState.MovingCCW
         else:
-            state = SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotion
+            state = AzimuthState.NotInMotion
         return state
 
     def compute_door_state(self, open_pct, is_main, move_code):
@@ -292,15 +293,15 @@ class ATDomeCsc(salobj.BaseCsc):
         door_state = None
         if move_code & door_mask == 0:
             if open_pct == 0:
-                door_state = SALPY_ATDome.ATDome_shared_ShutterDoorState_Closed
+                door_state = ShutterDoorState.Closed
             elif open_pct == 100:
-                door_state = SALPY_ATDome.ATDome_shared_ShutterDoorState_Opened
+                door_state = ShutterDoorState.Opened
             else:
-                door_state = SALPY_ATDome.ATDome_shared_ShutterDoorState_PartiallyOpened
+                door_state = ShutterDoorState.PartiallyOpened
         elif move_code & closing_code:
-            door_state = SALPY_ATDome.ATDome_shared_ShutterDoorState_Closing
+            door_state = ShutterDoorState.Closing
         elif move_code & opening_code:
-            door_state = SALPY_ATDome.ATDome_shared_ShutterDoorState_Opening
+            door_state = ShutterDoorState.Opening
         if door_state is None:
             raise RuntimeError(f"Could not parse main door state from move_code={move_code}")
         return door_state
