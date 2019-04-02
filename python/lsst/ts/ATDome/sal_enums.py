@@ -18,17 +18,31 @@
 #
 # You should have received a copy of the GNU General Public License
 
-__all__ = ["AzimuthState", "ShutterDoorState"]
+__all__ = ["AzimuthCommandedState", "AzimuthState", "ShutterDoorCommandedState", "ShutterDoorState"]
 
 import enum
 
 import SALPY_ATDome
 
 
+class AzimuthCommandedState(enum.IntEnum):
+    Unknown = SALPY_ATDome.ATDome_shared_AzimuthCommandedState_Unknown
+    GoToPosition = SALPY_ATDome.ATDome_shared_AzimuthCommandedState_GoToPosition
+    Home = SALPY_ATDome.ATDome_shared_AzimuthCommandedState_Home
+    Stop = SALPY_ATDome.ATDome_shared_AzimuthCommandedState_Stop
+
+
 class AzimuthState(enum.IntEnum):
     NotInMotion = SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotion
     MovingCW = SALPY_ATDome.ATDome_shared_AzimuthState_MovingCW
     MovingCCW = SALPY_ATDome.ATDome_shared_AzimuthState_MovingCCW
+
+
+class ShutterDoorCommandedState(enum.IntEnum):
+    Unknown = SALPY_ATDome.ATDome_shared_ShutterDoorCommandedState_Unknown
+    Closed = SALPY_ATDome.ATDome_shared_ShutterDoorCommandedState_Closed
+    Opened = SALPY_ATDome.ATDome_shared_ShutterDoorCommandedState_Opened
+    Stop = SALPY_ATDome.ATDome_shared_ShutterDoorCommandedState_Stop
 
 
 class ShutterDoorState(enum.IntEnum):
