@@ -215,8 +215,7 @@ class ATDomeCsc(salobj.BaseCsc):
                     err_msg = "TCP/IP read failed"
                 self.log.exception(err_msg)
                 await self.disconnect()
-                self.summary_state = salobj.State.FAULT
-                self.evt_errorCode.set_put(errorCode=2, errorReport=f"{err_msg}: {e}", force_output=True)
+                self.fault(code=2, report=f"{err_msg}: {e}")
                 return
 
             data = read_bytes.decode()
