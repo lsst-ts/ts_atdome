@@ -220,6 +220,7 @@ class ATDomeCsc(salobj.BaseCsc):
 
             data = read_bytes.decode()
             lines = data.split("\n")[:-1]  # strip final > line
+            lines = [elt.strip() for elt in lines]
             if len(lines) != expected_lines:
                 self.log.warning(f"Command {cmd} returned {data}; expected {expected_lines} lines")
                 return
