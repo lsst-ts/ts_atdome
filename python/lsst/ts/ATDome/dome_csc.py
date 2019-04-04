@@ -535,12 +535,15 @@ class ATDomeCsc(salobj.BaseCsc):
 
     async def _status_implementation(self):
         while self.connected:
-            if self.n_short_status % self.short_per_full == 0:
-                self.n_short_status = 0
-                await self.run_command("+")
-            else:
-                await self.run_command("?")
-            self.n_short_status += 1
+            try:
+                if self.n_short_status % self.short_per_full == 0:
+                    self.n_short_status = 0
+                    await self.run_command("+")
+                else:
+                    await self.run_command("?")
+                self.n_short_status += 1
+            except Exception as e:
+                self.log.warning(f"Status request failed: {e}")
             await asyncio.sleep(self.status_interval)
 
     async def stop(self, exception=None):
