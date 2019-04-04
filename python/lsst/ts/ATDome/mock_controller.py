@@ -247,6 +247,7 @@ class MockDomeController:
 
     async def cmd_loop(self, reader, writer):
         self.log.info("cmd_loop begins")
+        writer.write("ACE Main Box\n>".encode())
         while True:
             line = await reader.readline()
             line = line.decode()

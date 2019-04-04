@@ -373,8 +373,11 @@ class ATDomeCsc(salobj.BaseCsc):
         try:
             host = _LOCAL_HOST if self.simulation_mode == 1 else self.host
             self.connect_task = asyncio.open_connection(host=host, port=self.port)
-            self.reader, self.writer = await asyncio.wait_for(self.connect_task,
-                                                              timeout=self.connection_timeout)
+            async with self.cmd_lock:
+                self.reader, self.writer = await asyncio.wait_for(self.connect_task,
+                                                                  timeout=self.connection_timeout)
+                # drop welcome message
+                await asyncio.wait_for(self.reader.readuntil(">".encode()), timeout=self.read_timeout)
             self.log.debug("connected")
         except Exception as e:
             err_msg = f"Could not open connection to host={self.host}, port={self.port}"
