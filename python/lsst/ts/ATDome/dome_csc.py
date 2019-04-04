@@ -198,7 +198,7 @@ class ATDomeCsc(salobj.BaseCsc):
             else:
                 raise RuntimeError("Not connected and not trying to connect")
         async with self.cmd_lock:
-            self.writer.write(f"{cmd}\n".encode())
+            self.writer.write(f"{cmd}\r\n".encode())
             await self.writer.drain()
             expected_lines = {  # excluding final ">" line
                 "?": 5,
