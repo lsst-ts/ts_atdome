@@ -222,7 +222,8 @@ class ATDomeCsc(salobj.BaseCsc):
             data = read_bytes.decode()
             lines = data.split("\n")[:-1]  # strip final > line
             if len(lines) != expected_lines:
-                self.log.error(f"Read {data} but expected {expected_lines} lines")
+                self.log.warning(f"Command {cmd} returned {data}; expected {expected_lines} lines")
+                return
             if cmd == "?":
                 if self.handle_short_status(lines):
                     self.evt_settingsAppliedDomeController.put()
