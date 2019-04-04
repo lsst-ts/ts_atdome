@@ -28,6 +28,32 @@ import astropy.units as u
 MIDDLE_WRAP_ANGLE = Angle(180, u.deg)
 
 
+def parse(regex, line):
+    """Parse a line of status.
+
+    Parameters
+    ----------
+    regex : `str`
+        Regex to match
+    line : `str`
+        Line to parse
+
+    Returns
+    -------
+    match : `re.Match`
+        The match.
+
+    Raises
+    ------
+    RuntimeError
+        If the line does not match the regex.
+    """
+    match = re.match(regex, line)
+    if match is None:
+        raise RuntimeError(f"Cound not parse {line!r} as {regex}")
+    return match
+
+
 class ShortStatus:
     """Short status from the TCP/IP AT Dome controller.
     """
@@ -35,26 +61,21 @@ class ShortStatus:
         if len(lines) != 5:
             raise RuntimeError(f"Got {len(lines)} lines; need 5")
 
-        shutter_match = re.match(r"MAIN +[A-Z]+ +(\d+)", lines[0])
-        assert shutter_match, f"Could not parse short status line 1: {lines[0]}"
+        shutter_match = parse(r"MAIN +[A-Z]+ +(\d+)", lines[0])
         self.main_door_pct = float(shutter_match.group(1))
 
-        door_match = re.match(r"DROP +[A-Z]+ +(\d+)", lines[1])
-        assert door_match, f"Could not parse short status line 2: {lines[1]}"
+        door_match = parse(r"DROP +[A-Z]+ +(\d+)", lines[1])
         self.dropout_door_pct = float(door_match.group(1))
 
-        auto_shutdown_match = re.match(r"\[(ON|OFF)\] +(\d+)", lines[2])
-        assert auto_shutdown_match, f"Could not parse short status line 3: {lines[2]}"
+        auto_shutdown_match = parse(r"\[(ON|OFF)\] +(\d+)", lines[2])
         self.auto_shutdown_enabled = auto_shutdown_match.group(1) == "ON"
 
         self.sensor_code = int(auto_shutdown_match.group(2))
 
-        az_match = re.match(r"Posn +(\d*\.?\d+)", lines[3])
-        assert az_match, f"Could not parse short status line 4: {lines[3]}"
-        self.az_pos = Angle(float(az_match.group(1)), u.deg)
+        az_match = parse(r"(POSN|HOME) +(\d*\.?\d+)", lines[3])
+        self.az_pos = Angle(float(az_match.group(2)), u.deg)
 
-        code_match = re.match(r"(RL|RR|\?\?) +(\d+)", lines[4])
-        assert code_match, f"Could not parse short status line 5: {lines[4]}"
+        code_match = parse(r"(RL|RR|--) +(\d+)", lines[4])
         move_code = int(code_match.group(2))
         self.move_code = move_code
 
@@ -66,41 +87,32 @@ class RemainingStatus:
     Breaking full status into two object simplifies CSC code.
     """
     def __init__(self, lines):
-        if len(lines) != 23:
-            raise RuntimeError(f"Got {len(lines)} lines; need 23")
+        if len(lines) != 25:
+            raise RuntimeError(f"Got {len(lines)} lines; need 25")
 
-        estop_active_match = re.match(r"Emergency Stop Active: +(\d)", lines[5])
-        assert estop_active_match
+        estop_active_match = parse(r"Emergency Stop Active: +(\d)", lines[5])
         self.estop_active = bool(int(estop_active_match.group(1)))
 
-        scb_link_ok_match = re.match(r"SCB radio link OK: +(\d)", lines[6])
-        assert scb_link_ok_match
+        scb_link_ok_match = parse(r"SCB radio link OK: +(\d)", lines[6])
         self.scb_link_ok = bool(int(scb_link_ok_match.group(1)))
 
-        rain_sensor_match = re.match(r"Rain-Snow enabled: +(\d)", lines[14])
-        assert rain_sensor_match
+        rain_sensor_match = parse(r"Rain-Snow enabled: +(\d)", lines[15])
         self.rain_sensor_enabled = bool(int(rain_sensor_match.group(1)))
 
-        cloud_sensor_match = re.match(r"Cloud Sensor enabled: +(\d)", lines[15])
-        assert cloud_sensor_match
+        cloud_sensor_match = parse(r"Cloud Sensor enabled: +(\d)", lines[16])
         self.cloud_sensor_enabled = bool(int(cloud_sensor_match.group(1)))
 
-        tolerance_match = re.match(r"Tolerance \(degrees\): +(\d*\.?\d+)", lines[10])
-        assert tolerance_match
+        tolerance_match = parse(r"Tolerance \(degrees\): +(\d*\.?\d+)", lines[10])
         self.tolerance = Angle(float(tolerance_match.group(1)), u.deg)
 
-        home_azimuth = re.match(r"Home Azimuth: +(\d*\.?\d+)", lines[7])
-        assert home_azimuth
+        home_azimuth = parse(r"Home Azimuth: +(\d*\.?\d+)", lines[7])
         self.home_azimuth = Angle(float(home_azimuth.group(1)), u.deg)
 
-        high_speed_match = re.match(r"High Speed \(degrees\): +(\d*\.?\d+)", lines[8])
-        assert high_speed_match
+        high_speed_match = parse(r"High Speed \(degrees\): +(\d*\.?\d+)", lines[8])
         self.high_speed = Angle(float(high_speed_match.group(1)), u.deg)
 
-        watchdog_timer_match = re.match(r"Watchdog Reset Time: +(\d*\.?\d+)", lines[16])
-        assert watchdog_timer_match
+        watchdog_timer_match = parse(r"Watchdog Reset Time: +(\d*\.?\d+)", lines[17])
         self.watchdog_timer = float(watchdog_timer_match.group(1))
 
-        reversal_delay_match = re.match(r"Reverse Delay: +(\d*\.?\d+)", lines[18])
-        assert reversal_delay_match
+        reversal_delay_match = parse(r"Reverse Delay: +(\d*\.?\d+)", lines[19])
         self.reversal_delay = float(reversal_delay_match.group(1))

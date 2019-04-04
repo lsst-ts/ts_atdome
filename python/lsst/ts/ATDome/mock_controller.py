@@ -355,9 +355,9 @@ class MockDomeController:
 
         az_moving = self.az_actuator.moving
         curr_az = self.az_actuator.curr_pos
-        outputs.append(f"Posn {curr_az.deg:0.2f}")
+        outputs.append(f"POSN {curr_az.deg:0.2f}")
         if self.last_rot_right is None:
-            dir_code = "??"
+            dir_code = "--"
         elif self.last_rot_right:
             dir_code = "RR"
         else:
@@ -386,6 +386,7 @@ class MockDomeController:
         outputs.append("Encoder Counts per 360: 490496")
         outputs.append("Encoder Counts:   1485289")
         outputs.append(f"Last Azimuth GoTo:   {self.az_actuator.end_pos:05.2f}")
+        outputs.append("Azimuth Move Timeout (secs): 120")
         outputs.append(f"Rain-Snow enabled:  {1 if self.rain_enabled else 0}")
         outputs.append(f"Cloud Sensor enabled: {1 if self.clouds_enabled else 0}")
         outputs.append("Watchdog Reset Time: 600")
@@ -395,6 +396,7 @@ class MockDomeController:
         outputs.append("Main Door Encoder Opened: 456540")
         outputs.append("Dropout Encoder Closed: 7156")
         outputs.append("Dropout Encoder Opened: 10321")
+        outputs.append("Door Move Timeout (secs): 360")
         return outputs
 
     def do_stop(self):

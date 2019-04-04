@@ -97,6 +97,7 @@ class ATDomeCsc(salobj.BaseCsc):
         self.short_per_full = 5  # number of short status between full status
         self.az_tolerance = Angle(0.2, u.deg)  # tolerance for "in position"
         self.status_sleep_task = None  # sleep in status_loop
+        self.status_task = None  # status_loop
         self.connect_task = None  # wait while connecting
         self.cmd_lock = asyncio.Lock()
         super().__init__(SALPY_ATDome, index=index, initial_state=initial_state,
@@ -113,7 +114,7 @@ class ATDomeCsc(salobj.BaseCsc):
         await self.run_command(f"{azimuth:0.3f} MV")
         self.evt_azimuthCommandedState.set_put(commandedState=AzimuthCommandedState.GoToPosition,
                                                azimuth=azimuth, force_output=True)
-        await self.run_one_status()
+        self.cancel_status_sleep()
 
     async def do_closeShutter(self, id_data):
         self.assert_enabled("closeShutter")
@@ -122,7 +123,7 @@ class ATDomeCsc(salobj.BaseCsc):
                                                    force_output=True)
         self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.Closed,
                                                 force_output=True)
-        await self.run_one_status()
+        self.cancel_status_sleep()
 
     async def do_openShutter(self, id_data):
         self.assert_enabled("openShutter")
@@ -131,7 +132,7 @@ class ATDomeCsc(salobj.BaseCsc):
                                                    force_output=True)
         self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.Opened,
                                                 force_output=True)
-        await self.run_one_status()
+        self.cancel_status_sleep()
 
     async def do_stopMotion(self, id_data):
         self.assert_enabled("stopMotion")
@@ -142,7 +143,7 @@ class ATDomeCsc(salobj.BaseCsc):
         self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.Stop,
                                                 force_output=True)
         await self.run_command("ST")
-        await self.run_one_status()
+        self.cancel_status_sleep()
 
     async def do_homeAzimuth(self, id_data):
         self.assert_enabled("homeAzimuth")
@@ -151,7 +152,7 @@ class ATDomeCsc(salobj.BaseCsc):
         self.evt_azimuthCommandedState.set_put(commandedState=AzimuthCommandedState.Home,
                                                azimuth=math.nan, force_output=True)
         await self.run_command("HM")
-        await self.run_one_status()
+        self.cancel_status_sleep()
 
     async def do_moveShutterDropoutDoor(self, id_data):
         self.assert_enabled("moveShutterDropoutDoor")
@@ -165,7 +166,7 @@ class ATDomeCsc(salobj.BaseCsc):
             self.evt_dropoutDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.Closed,
                                                        force_output=True)
             await self.run_command("UP")
-        await self.run_one_status()
+        self.cancel_status_sleep()
 
     async def do_moveShutterMainDoor(self, id_data):
         self.assert_enabled("moveShutterMainDoor")
@@ -182,7 +183,7 @@ class ATDomeCsc(salobj.BaseCsc):
             self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.Closed,
                                                     force_output=True)
             await self.run_command("CL")
-        await self.run_one_status()
+        self.cancel_status_sleep()
 
     async def run_command(self, cmd):
         """Send a command to the TCP/IP controller and process its replies.
@@ -202,7 +203,7 @@ class ATDomeCsc(salobj.BaseCsc):
             await self.writer.drain()
             expected_lines = {  # excluding final ">" line
                 "?": 5,
-                "+": 23,
+                "+": 25,
             }.get(cmd, 0)
 
             try:
@@ -386,7 +387,7 @@ class ATDomeCsc(salobj.BaseCsc):
             self.evt_errorCode.set_put(errorCode=1, errorReport=f"{err_msg}: {e}", force_output=True)
             return
 
-        self.status_loop()
+        self.status_task = asyncio.ensure_future(self.status_loop())
 
     @property
     def connected(self):
@@ -407,6 +408,9 @@ class ATDomeCsc(salobj.BaseCsc):
                 await asyncio.wait_for(writer.drain(), timeout=2)
             finally:
                 writer.close()
+        self.cancel_status_sleep()
+        if self.status_task is not None:
+            await asyncio.wait_for(self.status_task, timeout=self.read_timeout*2)
 
     def handle_short_status(self, lines):
         """Handle output of "?" command.
@@ -513,13 +517,16 @@ class ATDomeCsc(salobj.BaseCsc):
             else:
                 asyncio.ensure_future(self.disconnect())
 
-    async def run_one_status(self):
-        """Cancel the status loop, get short status, restart status loop.
+    def cancel_status_sleep(self):
+        """Cancel the sleep between status updates in ``status_loop``.
+
+        If connected this triggers an immediate status request.
+        If disconnected this causes the status loop to quit
+        and ``status_task`` to finish.
+        If the status loop is not running then this has no effect.
         """
         if self.status_sleep_task is not None and not self.status_sleep_task.done():
             self.status_sleep_task.cancel()
-        await self.run_command("+")
-        self.status_loop()
 
     async def start(self, initial_simulation_mode):
         await super().start(initial_simulation_mode)
@@ -530,14 +537,11 @@ class ATDomeCsc(salobj.BaseCsc):
         self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.Unknown,
                                                 force_output=True)
 
-    def status_loop(self):
+    async def status_loop(self):
         """Read and report status from the TCP/IP controller.
         """
         if self.status_sleep_task and not self.status_sleep_task.done():
             self.status_sleep_task.cancel()
-        self.status_sleep_task = asyncio.ensure_future(self._status_implementation())
-
-    async def _status_implementation(self):
         while self.connected:
             try:
                 if self.n_short_status % self.short_per_full == 0:
@@ -548,7 +552,10 @@ class ATDomeCsc(salobj.BaseCsc):
                 self.n_short_status += 1
             except Exception as e:
                 self.log.warning(f"Status request failed: {e}")
-            await asyncio.sleep(self.status_interval)
+            try:
+                self.status_sleep_task = await asyncio.sleep(self.status_interval)
+            except asyncio.CancelledError:
+                pass
 
     async def stop(self, exception=None):
         """Disconnect from the TCP/IP controller and stop the CSC.
