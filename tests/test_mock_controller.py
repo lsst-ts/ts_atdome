@@ -42,7 +42,9 @@ class MockTestCase(unittest.TestCase):
             await asyncio.wait_for(self.ctrl.start(), 5)
             rw_coro = asyncio.open_connection(host="127.0.0.1", port=self.port)
             self.reader, self.writer = await asyncio.wait_for(rw_coro, timeout=5)
-
+            read_bytes = await asyncio.wait_for(self.reader.readuntil(">".encode()), timeout=5)
+            read_str = read_bytes.decode().strip()
+            self.assertEqual(read_str, "ACE Main Box\n>")
         asyncio.get_event_loop().run_until_complete(doit())
 
     def tearDown(self):
