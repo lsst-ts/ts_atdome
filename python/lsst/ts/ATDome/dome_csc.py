@@ -23,6 +23,7 @@ __all__ = ["ATDomeCsc"]
 import asyncio
 import enum
 import math
+import pathlib
 
 from astropy.coordinates import Angle
 import astropy.units as u
@@ -55,7 +56,7 @@ class Axis(enum.Flag):
     MainDoor = enum.auto()
 
 
-class ATDomeCsc(salobj.BaseCsc):
+class ATDomeCsc(salobj.ConfigurableCsc):
     """AuxTel dome CSC
 
     Parameters
@@ -67,6 +68,9 @@ class ATDomeCsc(salobj.BaseCsc):
         as real CSCs should start up in `State.STANDBY`, the default.
     initial_simulation_mode : `int` (optional)
         Initial simulation mode.
+    mock_port : `int` (optional)
+        Port for mock controller TCP/IP interface. If `None` then use the
+        port specified by the configuration. Only used in simulation mode.
 
     Raises
     ------
@@ -87,7 +91,10 @@ class ATDomeCsc(salobj.BaseCsc):
     * 1: could not connect to TCP/IP ATDome controller
     * 2: read from TCP/IP ATDome controller timed out
     """
-    def __init__(self, index, initial_state=salobj.State.STANDBY, initial_simulation_mode=0):
+    def __init__(self, index, config_dir=None, initial_state=salobj.State.STANDBY,
+                 initial_simulation_mode=0, mock_port=None):
+        schema_path = pathlib.Path(__file__).resolve().parents[4].joinpath("schema", "ATDome.yaml")
+
         self.reader = None
         self.writer = None
         self.move_code = 0
@@ -100,9 +107,11 @@ class ATDomeCsc(salobj.BaseCsc):
         self.status_task = None  # status_loop
         self.connect_task = None  # wait while connecting
         self.cmd_lock = asyncio.Lock()
-        super().__init__(SALPY_ATDome, index=index, initial_state=initial_state,
-                         initial_simulation_mode=initial_simulation_mode)
-        self.configure()
+        self.config = None
+        self.mock_port = mock_port
+        self.defer_simulation_mode_until_configured = False
+        super().__init__(SALPY_ATDome, index=index, schema_path=schema_path, config_dir=config_dir,
+                         initial_state=initial_state, initial_simulation_mode=initial_simulation_mode)
 
     async def do_moveAzimuth(self, id_data):
         self.assert_enabled("moveAzimuth")
@@ -208,7 +217,7 @@ class ATDomeCsc(salobj.BaseCsc):
 
             try:
                 read_bytes = await asyncio.wait_for(self.reader.readuntil(">".encode()),
-                                                    timeout=self.read_timeout)
+                                                    timeout=self.config.read_timeout)
             except Exception as e:
                 if isinstance(e, asyncio.streams.IncompleteReadError):
                     err_msg = "TCP/IP controller exited"
@@ -336,56 +345,55 @@ class ATDomeCsc(salobj.BaseCsc):
             raise RuntimeError(f"Could not parse main door state from move_code={move_code}")
         return door_state
 
-    def configure(self, host=_LOCAL_HOST, port=17310, connection_timeout=10, read_timeout=10):
-        """Configure the CSC.
+    @staticmethod
+    def get_config_pkg():
+        return "ts_config_attcs"
 
-        Parameters
-        ----------
-        host : `str`
-            Host IP address of ATDome TCP/IP controller.
-            Ignored in simulation mode.
-        port : `int`
-            Port of ATDome TCP/IP controller.
-        connection_timeout : `float`
-            Time limit for TCP/IP connection (sec).
-        read_timeout : `float`
-            Time limit for TCP/IP read (sec).
-        """
-        assert read_timeout > 0
-        assert connection_timeout > 0
-        self.host = host
-        self.port = port
-        self.connection_timeout = connection_timeout
-        self.read_timeout = read_timeout
+    async def configure(self, config):
+        self.config = config
         self.evt_settingsAppliedDomeTcp.set_put(
-            host=host,
-            port=port,
-            connectionTimeout=connection_timeout,
-            readTimeout=read_timeout,
+            host=self.config.host,
+            port=self.config.port,
+            connectionTimeout=self.config.connection_timeout,
+            readTimeout=self.config.read_timeout,
             force_output=True,
         )
+        if self.defer_simulation_mode_until_configured:
+            self.defer_simulation_mode_until_configured = False
+            await self._handle_simulation_mode(self.simulation_mode)
 
     async def connect(self):
         """Connect to the dome controller's TCP/IP port.
         """
         self.log.debug("connect")
+        if self.config is None:
+            raise RuntimeError("Not yet configured")
         if self.connected:
             raise RuntimeError("Already connected")
+        if self.connect_task is not None:
+            self.log.warning("Connect called while already connecting; ignoring the second call")
+            return
+        host = _LOCAL_HOST if self.simulation_mode == 1 else self.config.host
         try:
-            host = _LOCAL_HOST if self.simulation_mode == 1 else self.host
-            self.connect_task = asyncio.open_connection(host=host, port=self.port)
             async with self.cmd_lock:
+                if self.mock_ctrl is not None and self.mock_port is not None:
+                    port = self.mock_port
+                else:
+                    port = self.config.port
+                self.connect_task = asyncio.open_connection(host=host, port=port)
                 self.reader, self.writer = await asyncio.wait_for(self.connect_task,
-                                                                  timeout=self.connection_timeout)
+                                                                  timeout=self.config.connection_timeout)
                 # drop welcome message
-                await asyncio.wait_for(self.reader.readuntil(">".encode()), timeout=self.read_timeout)
+                await asyncio.wait_for(self.reader.readuntil(">".encode()), timeout=self.config.read_timeout)
             self.log.debug("connected")
         except Exception as e:
-            err_msg = f"Could not open connection to host={self.host}, port={self.port}"
+            err_msg = f"Could not open connection to host={host}, port={self.config.port}"
             self.log.exception(err_msg)
             self.summary_state = salobj.State.FAULT
             self.evt_errorCode.set_put(errorCode=1, errorReport=f"{err_msg}: {e}", force_output=True)
             return
+        finally:
+            self.connect_task = None
 
         self.status_task = asyncio.ensure_future(self.status_loop())
 
@@ -410,7 +418,7 @@ class ATDomeCsc(salobj.BaseCsc):
                 writer.close()
         self.cancel_status_sleep()
         if self.status_task is not None:
-            await asyncio.wait_for(self.status_task, timeout=self.read_timeout*2)
+            await asyncio.wait_for(self.status_task, timeout=self.config.read_timeout*2)
 
     def handle_short_status(self, lines):
         """Handle output of "?" command.
@@ -501,13 +509,28 @@ class ATDomeCsc(salobj.BaseCsc):
         if self.simulation_mode == simulation_mode:
             return
 
-        await self.disconnect()
-        await self.stop_mock_ctrl()
-        if simulation_mode == 1:
-            self.mock_ctrl = MockDomeController(port=self.port)
-            await asyncio.wait_for(self.mock_ctrl.start(), timeout=2)
-        if self.want_connection:
-            await self.connect()
+        if self.config is None:
+            self.log.debug("defer_simulation_mode_until_configured")
+            self.defer_simulation_mode_until_configured = True
+            return
+
+        await self._handle_simulation_mode(simulation_mode)
+
+    async def _handle_simulation_mode(self, simulation_mode):
+        try:
+            async with self.cmd_lock:
+                await self.disconnect()
+                await self.stop_mock_ctrl()
+                if simulation_mode == 1:
+                    if self.mock_port is not None:
+                        port = self.mock_port
+                    else:
+                        port = self.config.port
+                    self.mock_ctrl = MockDomeController(port=port)
+                    await asyncio.wait_for(self.mock_ctrl.start(), timeout=2)
+        except Exception as e:
+            self.log.exception(e)
+            raise
 
     def report_summary_state(self):
         super().report_summary_state()
