@@ -65,7 +65,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         SAL component index, or 0 or None if the component is not indexed.
     initial_state : `salobj.State` or `int` (optional)
         The initial state of the CSC. This is provided for unit testing,
-        as real CSCs should start up in `State.STANDBY`, the default.
+        as real CSCs should start up in `lsst.ts.salobj.StateSTANDBY`,
+        the default.
     initial_simulation_mode : `int` (optional)
         Initial simulation mode.
     mock_port : `int` (optional)
@@ -114,6 +115,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                          initial_state=initial_state, initial_simulation_mode=initial_simulation_mode)
 
     async def do_moveAzimuth(self, id_data):
+        """Implement the ``moveAzimuth`` command."""
         self.assert_enabled("moveAzimuth")
         if self.evt_azimuthState.data.homing:
             raise salobj.ExpectedError("Cannot move azimuth while homing")
@@ -126,6 +128,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.cancel_status_sleep()
 
     async def do_closeShutter(self, id_data):
+        """Implement the ``closeShutter`` command."""
         self.assert_enabled("closeShutter")
         await self.run_command("SC")
         self.evt_dropoutDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.Closed,
@@ -135,6 +138,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.cancel_status_sleep()
 
     async def do_openShutter(self, id_data):
+        """Implement the ``openShutter`` command."""
         self.assert_enabled("openShutter")
         await self.run_command("SO")
         self.evt_dropoutDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.Opened,
@@ -144,6 +148,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.cancel_status_sleep()
 
     async def do_stopMotion(self, id_data):
+        """Implement the ``stopMotion`` command."""
         self.assert_enabled("stopMotion")
         self.evt_azimuthCommandedState.set_put(commandedState=AzimuthCommandedState.Stop,
                                                force_output=True)
@@ -155,6 +160,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.cancel_status_sleep()
 
     async def do_homeAzimuth(self, id_data):
+        """Implement the ``homeAzimuth`` command."""
         self.assert_enabled("homeAzimuth")
         if self.evt_azimuthState.data.homing:
             raise salobj.ExpectedError("Already homing")
@@ -164,6 +170,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.cancel_status_sleep()
 
     async def do_moveShutterDropoutDoor(self, id_data):
+        """Implement the ``moveShutterDropoutDoor`` command."""
         self.assert_enabled("moveShutterDropoutDoor")
         if self.evt_mainDoorState.data.state != ShutterDoorState.Opened:
             raise salobj.ExpectedError("Cannot move the dropout door until the main door is fully open.")
@@ -178,6 +185,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.cancel_status_sleep()
 
     async def do_moveShutterMainDoor(self, id_data):
+        """Implement the ``moveShutterMainDoor`` command."""
         self.assert_enabled("moveShutterMainDoor")
         if id_data.data.open:
             self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.Opened,
@@ -304,7 +312,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         Returns
         -------
         state : `int`
-            The appropriate ``AzimuthState`` enum value.
+            The appropriate `AzimuthState` enum value.
         """
         if move_code & MoveCode.AzPositive:
             state = AzimuthState.MovingCW
