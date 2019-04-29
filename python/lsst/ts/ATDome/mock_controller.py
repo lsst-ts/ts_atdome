@@ -35,6 +35,7 @@ logging.basicConfig()
 
 
 class Door(enum.Flag):
+    """Shutter door identifiers."""
     Main = enum.auto()
     Dropout = enum.auto()
 
@@ -57,15 +58,16 @@ class Actuator:
 
     @property
     def start_pos(self):
+        """Start position of move."""
         return self._start_pos
 
     @property
     def end_pos(self):
+        """End position of move."""
         return self._end_pos
 
     def set_pos(self, pos):
-        """Set a new desired position.
-        """
+        """Set a new desired position."""
         if pos < self.min_pos or pos > self.max_pos:
             raise ValueError(f"pos={pos} not in range [{self.min_pos}, {self.max_pos}]")
         self._start_pos = self.curr_pos
@@ -79,6 +81,7 @@ class Actuator:
 
     @property
     def curr_pos(self):
+        """Current position."""
         curr_time = time.time()
         if curr_time > self._end_time:
             return self.end_pos
@@ -88,13 +91,20 @@ class Actuator:
 
     @property
     def direction(self):
+        """1 if moving or moved to greater position, -1 otherwise."""
         return 1 if self.end_pos >= self.start_pos else -1
 
     @property
     def moving(self):
+        """Is the axis moving?"""
         return time.time() < self._end_time
 
     def stop(self):
+        """Stop motion instantly.
+
+        Set start_pos and end_pos to the current position
+        and start_time and end_time to the current time.
+        """
         curr_pos = self.curr_pos
         curr_time = time.time()
         self._start_pos = curr_pos
@@ -126,6 +136,7 @@ class AzActuator(Actuator):
 
     @property
     def direction(self):
+        """1 if moving or moved to greater azimuth, -1 otherwise."""
         return 1 if angle_diff(self.end_pos, self.start_pos) > 0 else -1
 
     def _move_duration(self):
@@ -221,8 +232,9 @@ class MockDomeController:
         """
 
     async def start(self):
-        """Start the TCP/IP server, set start_task Done
-        and start the command loop.
+        """Start the TCP/IP server.
+
+        Set start_task done and start the command loop.
         """
         self._server = await asyncio.start_server(self.cmd_loop, host="127.0.0.1", port=self.port)
 
@@ -239,13 +251,19 @@ class MockDomeController:
 
     @property
     def homing(self):
+        """Is azimuth being homed?"""
         return self._homing_task is not None and not self._homing_task.done()
 
     def cancel_homing(self):
+        """Cancel azimuth homing.
+
+        A no-op if azimuth is not being homed.
+        """
         if self.homing:
             self._homing_task.cancel()
 
     async def cmd_loop(self, reader, writer):
+        """Execute commands and output replies."""
         self.log.info("cmd_loop begins")
         writer.write("ACE Main Box\n>".encode())
         while True:
@@ -329,6 +347,7 @@ class MockDomeController:
         self.set_cmd_az(cmd_az)
 
     def do_short_status(self):
+        """Create short status as a list of strings."""
         move_code = 0
         outputs = []
         for door, name, closing_code in ((Door.Main, "MAIN", 4), (Door.Dropout, "DROP", 16)):
@@ -376,6 +395,7 @@ class MockDomeController:
         return outputs
 
     def do_full_status(self):
+        """Create full status as a list of strings."""
         outputs = self.do_short_status()
         outputs.append(f"Emergency Stop Active: {1 if self.estop_active else 0}")
         outputs.append(f"SCB radio link OK:    {1 if self.scb_link_ok else 0}")
@@ -400,6 +420,7 @@ class MockDomeController:
         return outputs
 
     def do_stop(self):
+        """Stop all motion."""
         self.az_actuator.stop()
         for actuator in self.door_actuators.values():
             actuator.stop()
