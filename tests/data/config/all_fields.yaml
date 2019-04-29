@@ -1,0 +1,4 @@
+host: "1.2.3.4"
+port: 2345
+connection_timeout: 3.4
+read_timeout: 4.5
