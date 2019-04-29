@@ -82,7 +82,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     -----
     **Simulation Modes**
 
-    Supported simulation modes:
+    Supported simulation modes (TODO DM-19530 update these values):
 
     * 0: regular operation
     * 1: simulation mode: start a mock TCP/IP ATDome controller and talk to it
@@ -384,8 +384,10 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         host = _LOCAL_HOST if self.simulation_mode == 1 else self.config.host
         try:
             async with self.cmd_lock:
-                if self.mock_ctrl is not None and self.mock_port is not None:
-                    port = self.mock_port
+                if self.simulation_mode != 0:
+                    if self.mock_ctrl is None:
+                        raise RuntimeError("In simulation mode but no mock controller found.")
+                    port = self.mock_ctrl.port
                 else:
                     port = self.config.port
                 self.connect_task = asyncio.open_connection(host=host, port=port)
