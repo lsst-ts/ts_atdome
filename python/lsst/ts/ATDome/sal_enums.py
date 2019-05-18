@@ -22,32 +22,30 @@ __all__ = ["AzimuthCommandedState", "AzimuthState", "ShutterDoorCommandedState",
 
 import enum
 
-import SALPY_ATDome
-
 
 class AzimuthCommandedState(enum.IntEnum):
-    Unknown = SALPY_ATDome.ATDome_shared_AzimuthCommandedState_Unknown
-    GoToPosition = SALPY_ATDome.ATDome_shared_AzimuthCommandedState_GoToPosition
-    Home = SALPY_ATDome.ATDome_shared_AzimuthCommandedState_Home
-    Stop = SALPY_ATDome.ATDome_shared_AzimuthCommandedState_Stop
+    Unknown = 1
+    GoToPosition = 2
+    Home = 3
+    Stop = 4
 
 
 class AzimuthState(enum.IntEnum):
-    NotInMotion = SALPY_ATDome.ATDome_shared_AzimuthState_NotInMotion
-    MovingCW = SALPY_ATDome.ATDome_shared_AzimuthState_MovingCW
-    MovingCCW = SALPY_ATDome.ATDome_shared_AzimuthState_MovingCCW
+    NotInMotion = 1
+    MovingCW = 2
+    MovingCCW = 3
 
 
 class ShutterDoorCommandedState(enum.IntEnum):
-    Unknown = SALPY_ATDome.ATDome_shared_ShutterDoorCommandedState_Unknown
-    Closed = SALPY_ATDome.ATDome_shared_ShutterDoorCommandedState_Closed
-    Opened = SALPY_ATDome.ATDome_shared_ShutterDoorCommandedState_Opened
-    Stop = SALPY_ATDome.ATDome_shared_ShutterDoorCommandedState_Stop
+    Unknown = 1
+    Closed = 2
+    Opened = 3
+    Stop = 4
 
 
 class ShutterDoorState(enum.IntEnum):
-    Closed = SALPY_ATDome.ATDome_shared_ShutterDoorState_Closed
-    Opened = SALPY_ATDome.ATDome_shared_ShutterDoorState_Opened
-    PartiallyOpened = SALPY_ATDome.ATDome_shared_ShutterDoorState_PartiallyOpened
-    Opening = SALPY_ATDome.ATDome_shared_ShutterDoorState_Opening
-    Closing = SALPY_ATDome.ATDome_shared_ShutterDoorState_Closing
+    Closed = 1
+    Opened = 2
+    PartiallyOpened = 3
+    Opening = 4
+    Closing = 5

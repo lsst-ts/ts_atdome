@@ -33,8 +33,6 @@ import astropy.units as u
 from lsst.ts import salobj
 from lsst.ts import ATDome
 
-import SALPY_ATDome
-
 STD_TIMEOUT = 2  # standard command timeout (sec)
 LONG_TIMEOUT = 20  # timeout for starting SAL components (sec)
 TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
@@ -46,15 +44,20 @@ class Harness:
     def __init__(self, initial_state, config_dir=None):
         salobj.test_utils.set_random_lsst_dds_domain()
         self.index = 1
-        self.remote = salobj.Remote(SALPY_ATDome, index=self.index)
         self.csc = ATDome.ATDomeCsc(
             index=self.index, config_dir=config_dir,
             initial_state=initial_state,
             initial_simulation_mode=1,
             mock_port=next(port_generator))
+        self.remote = salobj.Remote(domain=self.csc.domain, name="ATDome", index=self.index)
 
-    async def stop(self):
-        await self.csc.stop()
+    async def __aenter__(self):
+        await self.csc.start_task
+        await self.remote.start_task
+        return self
+
+    async def __aexit__(self, *args):
+        await self.csc.close()
 
 
 class CscTestCase(unittest.TestCase):
@@ -64,298 +67,294 @@ class CscTestCase(unittest.TestCase):
     def test_initial_info(self):
 
         async def doit():
-            harness = Harness(initial_state=salobj.State.ENABLED)
-            state = await harness.remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
-            self.assertEqual(state.summaryState, salobj.State.ENABLED)
+            async with Harness(initial_state=salobj.State.ENABLED) as harness:
+                state = await harness.remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
+                self.assertEqual(state.summaryState, salobj.State.ENABLED)
 
-            azimuthCmdState = await harness.remote.evt_azimuthCommandedState.next(flush=False,
-                                                                                  timeout=STD_TIMEOUT)
-            self.assertEqual(azimuthCmdState.commandedState, ATDome.AzimuthCommandedState.Unknown)
-            self.assertTrue(math.isnan(azimuthCmdState.azimuth))
-
-            dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False,
+                azimuthCmdState = await harness.remote.evt_azimuthCommandedState.next(flush=False,
                                                                                       timeout=STD_TIMEOUT)
-            self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
-            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
+                self.assertEqual(azimuthCmdState.commandedState, ATDome.AzimuthCommandedState.Unknown)
+                self.assertTrue(math.isnan(azimuthCmdState.azimuth))
 
-            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
-            self.assertFalse(az_state.homing)
+                dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False,
+                                                                                          timeout=STD_TIMEOUT)
+                self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
+                mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
 
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state, ATDome.ShutterDoorState.Closed)
-            dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(dropout_door_state.state,
-                             ATDome.ShutterDoorState.Closed)
-            emergency_stop = await harness.remote.evt_emergencyStop.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertFalse(emergency_stop.active)
+                az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
+                self.assertFalse(az_state.homing)
 
-            position = await harness.remote.tel_position.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(position.dropoutDoorOpeningPercentage, 0)
-            self.assertEqual(position.mainDoorOpeningPercentage, 0)
-            self.assertAlmostEqual(position.azimuthPosition, 0)
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state, ATDome.ShutterDoorState.Closed)
+                dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(dropout_door_state.state,
+                                 ATDome.ShutterDoorState.Closed)
+                emergency_stop = await harness.remote.evt_emergencyStop.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertFalse(emergency_stop.active)
 
-            tcp_settings = await harness.remote.evt_settingsAppliedDomeTcp.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(tcp_settings.host, harness.csc.config.host)
-            self.assertEqual(tcp_settings.port, harness.csc.config.port)
-            self.assertEqual(tcp_settings.connectionTimeout, harness.csc.config.connection_timeout)
-            self.assertEqual(tcp_settings.readTimeout, harness.csc.config.read_timeout)
+                position = await harness.remote.tel_position.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(position.dropoutDoorOpeningPercentage, 0)
+                self.assertEqual(position.mainDoorOpeningPercentage, 0)
+                self.assertAlmostEqual(position.azimuthPosition, 0)
 
-            await harness.stop()
+                tcp_settings = await harness.remote.evt_settingsAppliedDomeTcp.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(tcp_settings.host, harness.csc.config.host)
+                self.assertEqual(tcp_settings.port, harness.csc.config.port)
+                self.assertEqual(tcp_settings.connectionTimeout, harness.csc.config.connection_timeout)
+                self.assertEqual(tcp_settings.readTimeout, harness.csc.config.read_timeout)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
     def test_default_config_dir(self):
         async def doit():
-            harness = Harness(initial_state=salobj.State.STANDBY)
-            self.assertEqual(harness.csc.summary_state, salobj.State.STANDBY)
+            async with Harness(initial_state=salobj.State.STANDBY) as harness:
+                self.assertEqual(harness.csc.summary_state, salobj.State.STANDBY)
 
-            desired_config_pkg_name = "ts_config_attcs"
-            desired_config_env_name = desired_config_pkg_name.upper() + "_DIR"
-            desird_config_pkg_dir = os.environ[desired_config_env_name]
-            desired_config_dir = pathlib.Path(desird_config_pkg_dir) / "ATDome/v1"
-            self.assertEqual(harness.csc.get_config_pkg(), desired_config_pkg_name)
-            self.assertEqual(harness.csc.config_dir, desired_config_dir)
-
-            await harness.stop()
+                desired_config_pkg_name = "ts_config_attcs"
+                desired_config_env_name = desired_config_pkg_name.upper() + "_DIR"
+                desird_config_pkg_dir = os.environ[desired_config_env_name]
+                desired_config_dir = pathlib.Path(desird_config_pkg_dir) / "ATDome/v1"
+                self.assertEqual(harness.csc.get_config_pkg(), desired_config_pkg_name)
+                self.assertEqual(harness.csc.config_dir, desired_config_dir)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
     def test_configuration(self):
         async def doit():
-            harness = Harness(initial_state=salobj.State.STANDBY, config_dir=TEST_CONFIG_DIR)
-            self.assertEqual(harness.csc.summary_state, salobj.State.STANDBY)
-            state = await harness.remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
-            self.assertEqual(state.summaryState, salobj.State.STANDBY)
+            async with Harness(initial_state=salobj.State.STANDBY, config_dir=TEST_CONFIG_DIR) as harness:
+                self.assertEqual(harness.csc.summary_state, salobj.State.STANDBY)
+                state = await harness.remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
+                self.assertEqual(state.summaryState, salobj.State.STANDBY)
 
-            invalid_files = glob.glob(os.path.join(TEST_CONFIG_DIR, "invalid_*.yaml"))
-            bad_config_names = [os.path.basename(name) for name in invalid_files]
-            bad_config_names.append("no_such_file.yaml")
-            for bad_config_name in bad_config_names:
-                with self.subTest(bad_config_name=bad_config_name):
-                    harness.remote.cmd_start.set(settingsToApply=bad_config_name)
-                    with salobj.test_utils.assertRaisesAckError():
-                        await harness.remote.cmd_start.start(timeout=STD_TIMEOUT)
+                invalid_files = glob.glob(os.path.join(TEST_CONFIG_DIR, "invalid_*.yaml"))
+                bad_config_names = [os.path.basename(name) for name in invalid_files]
+                bad_config_names.append("no_such_file.yaml")
+                for bad_config_name in bad_config_names:
+                    with self.subTest(bad_config_name=bad_config_name):
+                        harness.remote.cmd_start.set(settingsToApply=bad_config_name)
+                        with salobj.test_utils.assertRaisesAckError():
+                            await harness.remote.cmd_start.start(timeout=STD_TIMEOUT)
 
-            harness.remote.cmd_start.set(settingsToApply="all_fields")
-            await harness.remote.cmd_start.start(timeout=STD_TIMEOUT)
-            self.assertEqual(harness.csc.summary_state, salobj.State.DISABLED)
-            state = await harness.remote.evt_summaryState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(state.summaryState, salobj.State.DISABLED)
-            all_fields_path = os.path.join(TEST_CONFIG_DIR, "all_fields.yaml")
-            with open(all_fields_path, "r") as f:
-                all_fields_raw = f.read()
-            all_fields_data = yaml.safe_load(all_fields_raw)
-            for field, value in all_fields_data.items():
-                self.assertEqual(getattr(harness.csc.config, field), value)
-
-            await harness.stop()
+                harness.remote.cmd_start.set(settingsToApply="all_fields")
+                await harness.remote.cmd_start.start(timeout=STD_TIMEOUT)
+                self.assertEqual(harness.csc.summary_state, salobj.State.DISABLED)
+                state = await harness.remote.evt_summaryState.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(state.summaryState, salobj.State.DISABLED)
+                all_fields_path = os.path.join(TEST_CONFIG_DIR, "all_fields.yaml")
+                with open(all_fields_path, "r") as f:
+                    all_fields_raw = f.read()
+                all_fields_data = yaml.safe_load(all_fields_raw)
+                for field, value in all_fields_data.items():
+                    self.assertEqual(getattr(harness.csc.config, field), value)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
     def test_home(self):
         async def doit():
-            harness = Harness(initial_state=salobj.State.ENABLED)
+            async with Harness(initial_state=salobj.State.ENABLED) as harness:
+                state = await harness.remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
+                self.assertEqual(state.summaryState, salobj.State.ENABLED)
 
-            state = await harness.remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
-            self.assertEqual(state.summaryState, salobj.State.ENABLED)
+                cmdState = await harness.remote.evt_azimuthCommandedState.next(flush=False,
+                                                                               timeout=STD_TIMEOUT)
+                self.assertEqual(cmdState.commandedState, ATDome.AzimuthCommandedState.Unknown)
+                self.assertTrue(math.isnan(cmdState.azimuth))
 
-            cmdState = await harness.remote.evt_azimuthCommandedState.next(flush=False,
-                                                                           timeout=STD_TIMEOUT)
-            self.assertEqual(cmdState.commandedState, ATDome.AzimuthCommandedState.Unknown)
-            self.assertTrue(math.isnan(cmdState.azimuth))
+                az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
+                self.assertFalse(az_state.homing)
 
-            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
-            self.assertFalse(az_state.homing)
+                # set home azimuth near current position so homing goes quickly
+                curr_az = harness.csc.mock_ctrl.az_actuator.curr_pos
+                home_azimuth = (curr_az - 2*u.deg).wrap_at(Angle(360, u.deg))
+                harness.csc.mock_ctrl.home_az = home_azimuth
 
-            # set home azimuth near current position so homing goes quickly
-            curr_az = harness.csc.mock_ctrl.az_actuator.curr_pos
-            home_azimuth = (curr_az - 2*u.deg).wrap_at(Angle(360, u.deg))
-            harness.csc.mock_ctrl.home_az = home_azimuth
-
-            await harness.remote.cmd_homeAzimuth.start(timeout=STD_TIMEOUT)
-
-            # wait for homing to begin and check status
-            cmdState = await harness.remote.evt_azimuthCommandedState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(cmdState.commandedState, ATDome.AzimuthCommandedState.Home)
-            self.assertTrue(math.isnan(cmdState.azimuth))
-            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(az_state.state, ATDome.AzimuthState.MovingCCW)
-            self.assertTrue(az_state.homing)
-            position = harness.remote.tel_position.get()
-            self.assertGreater(position.azimuthPosition, home_azimuth.deg)
-
-            # check that moveAzimuth is disallowed while homing
-            harness.remote.cmd_moveAzimuth.set(azimuth=0)  # arbitrary
-            with salobj.assertRaisesAckError():
-                await harness.remote.cmd_moveAzimuth.start(timeout=STD_TIMEOUT)
-
-            # check that homing is disallowed while homing
-            harness.remote.cmd_moveAzimuth.set(azimuth=0)  # arbitrary
-            with salobj.assertRaisesAckError():
                 await harness.remote.cmd_homeAzimuth.start(timeout=STD_TIMEOUT)
 
-            # wait for the initial CCW homing move to finish
-            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertTrue(az_state.homing)
-            self.assertEqual(az_state.state, ATDome.AzimuthState.MovingCW)
-            self.assertAlmostEqual(harness.csc.mock_ctrl.az_actuator.speed.deg,
-                                   harness.csc.mock_ctrl.home_az_vel.deg)
+                # wait for homing to begin and check status
+                cmdState = await harness.remote.evt_azimuthCommandedState.next(flush=False,
+                                                                               timeout=STD_TIMEOUT)
+                self.assertEqual(cmdState.commandedState, ATDome.AzimuthCommandedState.Home)
+                self.assertTrue(math.isnan(cmdState.azimuth))
+                az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(az_state.state, ATDome.AzimuthState.MovingCCW)
+                self.assertTrue(az_state.homing)
+                position = harness.remote.tel_position.get()
+                self.assertGreater(position.azimuthPosition, home_azimuth.deg)
 
-            # wait for the slow CW homing move to finish
-            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertFalse(az_state.homing)
-            self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
-            self.assertAlmostEqual(harness.csc.mock_ctrl.az_actuator.speed.deg,
-                                   harness.csc.mock_ctrl.az_vel.deg)
-            position = harness.remote.tel_position.get()
-            self.assertAlmostEqual(position.azimuthPosition, home_azimuth.deg)
+                # check that moveAzimuth is disallowed while homing
+                harness.remote.cmd_moveAzimuth.set(azimuth=0)  # arbitrary
+                with salobj.assertRaisesAckError():
+                    await harness.remote.cmd_moveAzimuth.start(timeout=STD_TIMEOUT)
 
-            await harness.stop()
+                # check that homing is disallowed while homing
+                harness.remote.cmd_moveAzimuth.set(azimuth=0)  # arbitrary
+                with salobj.assertRaisesAckError():
+                    await harness.remote.cmd_homeAzimuth.start(timeout=STD_TIMEOUT)
+
+                # wait for the initial CCW homing move to finish
+                az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertTrue(az_state.homing)
+                self.assertEqual(az_state.state, ATDome.AzimuthState.MovingCW)
+                self.assertAlmostEqual(harness.csc.mock_ctrl.az_actuator.speed.deg,
+                                       harness.csc.mock_ctrl.home_az_vel.deg)
+
+                # wait for the slow CW homing move to finish
+                az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertFalse(az_state.homing)
+                self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
+                self.assertAlmostEqual(harness.csc.mock_ctrl.az_actuator.speed.deg,
+                                       harness.csc.mock_ctrl.az_vel.deg)
+                position = harness.remote.tel_position.get()
+                self.assertAlmostEqual(position.azimuthPosition, home_azimuth.deg)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
     def test_move_az(self):
         async def doit():
-            harness = Harness(initial_state=salobj.State.ENABLED)
-            state = await harness.remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
-            self.assertEqual(state.summaryState, salobj.State.ENABLED)
-            cmdState = await harness.remote.evt_azimuthCommandedState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(cmdState.commandedState, ATDome.AzimuthCommandedState.Unknown)
-            self.assertTrue(math.isnan(cmdState.azimuth))
+            async with Harness(initial_state=salobj.State.ENABLED) as harness:
+                state = await harness.remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
+                self.assertEqual(state.summaryState, salobj.State.ENABLED)
+                cmdState = await harness.remote.evt_azimuthCommandedState.next(flush=False,
+                                                                               timeout=STD_TIMEOUT)
+                self.assertEqual(cmdState.commandedState, ATDome.AzimuthCommandedState.Unknown)
+                self.assertTrue(math.isnan(cmdState.azimuth))
 
-            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
-            self.assertFalse(az_state.homing)
+                az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
+                self.assertFalse(az_state.homing)
 
-            desired_azimuth = 354
-            harness.remote.cmd_moveAzimuth.set(azimuth=desired_azimuth)
-            await harness.remote.cmd_moveAzimuth.start(timeout=STD_TIMEOUT)
+                desired_azimuth = 354
+                harness.remote.cmd_moveAzimuth.set(azimuth=desired_azimuth)
+                await harness.remote.cmd_moveAzimuth.start(timeout=STD_TIMEOUT)
 
-            # wait for the move to begin and check status
-            cmdState = await harness.remote.evt_azimuthCommandedState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(cmdState.commandedState, ATDome.AzimuthCommandedState.GoToPosition)
-            self.assertAlmostEqual(cmdState.azimuth, desired_azimuth)
-            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(az_state.state, ATDome.AzimuthState.MovingCCW)
-            self.assertFalse(az_state.homing)
-            position = harness.remote.tel_position.get()
-            self.assertGreater(position.azimuthPosition, desired_azimuth)
-            self.assertLess(position.azimuthPosition, 360)
+                # wait for the move to begin and check status
+                cmdState = await harness.remote.evt_azimuthCommandedState.next(flush=False,
+                                                                               timeout=STD_TIMEOUT)
+                self.assertEqual(cmdState.commandedState, ATDome.AzimuthCommandedState.GoToPosition)
+                self.assertAlmostEqual(cmdState.azimuth, desired_azimuth)
+                az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(az_state.state, ATDome.AzimuthState.MovingCCW)
+                self.assertFalse(az_state.homing)
+                position = harness.remote.tel_position.get()
+                self.assertGreater(position.azimuthPosition, desired_azimuth)
+                self.assertLess(position.azimuthPosition, 360)
 
-            # wait for the move to end and check status
-            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
-            self.assertFalse(az_state.homing)
-            position = harness.remote.tel_position.get()
-            self.assertAlmostEqual(position.azimuthPosition, desired_azimuth)
+                # wait for the move to end and check status
+                az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
+                self.assertFalse(az_state.homing)
+                position = harness.remote.tel_position.get()
+                self.assertAlmostEqual(position.azimuthPosition, desired_azimuth)
 
-            # try several invalid values for azimuth
-            for bad_az in (-0.001, 360.001):
-                harness.remote.cmd_moveAzimuth.set(azimuth=bad_az)
-                with salobj.test_utils.assertRaisesAckError():
-                    await harness.remote.cmd_moveAzimuth.start(timeout=STD_TIMEOUT)
-
-            await harness.stop()
+                # try several invalid values for azimuth
+                for bad_az in (-0.001, 360.001):
+                    harness.remote.cmd_moveAzimuth.set(azimuth=bad_az)
+                    with salobj.test_utils.assertRaisesAckError():
+                        await harness.remote.cmd_moveAzimuth.start(timeout=STD_TIMEOUT)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
     def test_move_shutter(self):
         async def doit():
-            harness = Harness(initial_state=salobj.State.ENABLED)
-            state = await harness.remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
-            self.assertEqual(state.summaryState, salobj.State.ENABLED)
+            async with Harness(initial_state=salobj.State.ENABLED) as harness:
+                state = await harness.remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
+                self.assertEqual(state.summaryState, salobj.State.ENABLED)
 
-            dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False,
-                                                                                      timeout=STD_TIMEOUT)
-            self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
-            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
+                dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False,
+                                                                                          timeout=STD_TIMEOUT)
+                self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
+                mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
 
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Closed)
-            dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(dropout_door_state.state,
-                             ATDome.ShutterDoorState.Closed)
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Closed)
+                dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(dropout_door_state.state,
+                                 ATDome.ShutterDoorState.Closed)
 
-            # open both doors
-            await harness.remote.cmd_openShutter.start(timeout=STD_TIMEOUT)
+                # open both doors
+                await harness.remote.cmd_openShutter.start(timeout=STD_TIMEOUT)
 
-            # wait for the move to begin and check status
-            dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False,
-                                                                                      timeout=STD_TIMEOUT)
-            self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
-            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
+                # wait for the move to begin and check status
+                dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False,
+                                                                                          timeout=STD_TIMEOUT)
+                self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
+                mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
 
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Opening)
-            dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(dropout_door_state.state,
-                             ATDome.ShutterDoorState.Opening)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertFalse(shutter_in_pos.inPosition)
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Opening)
+                dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(dropout_door_state.state,
+                                 ATDome.ShutterDoorState.Opening)
+                shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertFalse(shutter_in_pos.inPosition)
 
-            # wait for the move to end and check status
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Opened)
-            dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(dropout_door_state.state,
-                             ATDome.ShutterDoorState.Opened)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertTrue(shutter_in_pos.inPosition)
+                # wait for the move to end and check status
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Opened)
+                dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(dropout_door_state.state,
+                                 ATDome.ShutterDoorState.Opened)
+                shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertTrue(shutter_in_pos.inPosition)
 
-            # close both doors
-            await harness.remote.cmd_closeShutter.start(timeout=STD_TIMEOUT)
+                # close both doors
+                await harness.remote.cmd_closeShutter.start(timeout=STD_TIMEOUT)
 
-            # wait for the move to begin and check status
-            dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False,
-                                                                                      timeout=STD_TIMEOUT)
-            self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Closed)
-            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Closed)
+                # wait for the move to begin and check status
+                dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False,
+                                                                                          timeout=STD_TIMEOUT)
+                self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Closed)
+                mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Closed)
 
-            self.assertEqual(state.summaryState, salobj.State.ENABLED)
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Closing)
-            dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(dropout_door_state.state,
-                             ATDome.ShutterDoorState.Closing)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertFalse(shutter_in_pos.inPosition)
+                self.assertEqual(state.summaryState, salobj.State.ENABLED)
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Closing)
+                dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(dropout_door_state.state,
+                                 ATDome.ShutterDoorState.Closing)
+                shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertFalse(shutter_in_pos.inPosition)
 
-            # wait for the move to end and check status
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Closed)
-            dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(dropout_door_state.state,
-                             ATDome.ShutterDoorState.Closed)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertTrue(shutter_in_pos.inPosition)
-
-            await harness.stop()
+                # wait for the move to end and check status
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Closed)
+                dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(dropout_door_state.state,
+                                 ATDome.ShutterDoorState.Closed)
+                shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertTrue(shutter_in_pos.inPosition)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -369,282 +368,291 @@ class CscTestCase(unittest.TestCase):
           fully open or fully closed.
         """
         async def doit():
-            harness = Harness(initial_state=salobj.State.ENABLED)
-            state = await harness.remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
-            self.assertEqual(state.summaryState, salobj.State.ENABLED)
+            async with Harness(initial_state=salobj.State.ENABLED) as harness:
+                state = await harness.remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
+                self.assertEqual(state.summaryState, salobj.State.ENABLED)
 
-            dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False,
-                                                                                      timeout=STD_TIMEOUT)
-            self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
-            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
+                dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False,
+                                                                                          timeout=STD_TIMEOUT)
+                self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
+                mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Unknown)
 
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Closed)
-            dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(dropout_door_state.state,
-                             ATDome.ShutterDoorState.Closed)
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Closed)
+                dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(dropout_door_state.state,
+                                 ATDome.ShutterDoorState.Closed)
 
-            # check that we cannot open or close the dropout door
-            # because the main door is not fully open
-            harness.remote.cmd_moveShutterDropoutDoor.set(open=True)
-            with salobj.assertRaisesAckError():
-                await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
-            harness.remote.cmd_moveShutterDropoutDoor.set(open=False)
-            with salobj.assertRaisesAckError():
-                await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
+                # check that we cannot open or close the dropout door
+                # because the main door is not fully open
+                harness.remote.cmd_moveShutterDropoutDoor.set(open=True)
+                with salobj.assertRaisesAckError():
+                    await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
+                harness.remote.cmd_moveShutterDropoutDoor.set(open=False)
+                with salobj.assertRaisesAckError():
+                    await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
 
-            # open main door
-            harness.remote.cmd_moveShutterMainDoor.set(open=True)
-            await harness.remote.cmd_moveShutterMainDoor.start(timeout=STD_TIMEOUT)
-
-            # wait for the move to begin and check status
-            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
-
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Opening)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertFalse(shutter_in_pos.inPosition)
-
-            # check that we cannot open or close the dropout door
-            # because the main door is not fully open
-            harness.remote.cmd_moveShutterDropoutDoor.set(open=True)
-            with salobj.assertRaisesAckError():
-                await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
-            harness.remote.cmd_moveShutterDropoutDoor.set(open=False)
-            with salobj.assertRaisesAckError():
-                await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
-
-            # wait for the move to end and check status
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Opened)
-
-            # open the dropout door
-            harness.remote.cmd_moveShutterDropoutDoor.set(open=True)
-            await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
-
-            dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False,
-                                                                                      timeout=STD_TIMEOUT)
-            self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
-
-            dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(dropout_door_state.state,
-                             ATDome.ShutterDoorState.Opening)
-
-            # make sure we can't close the main door
-            # while the dropout door is moving
-            harness.remote.cmd_moveShutterMainDoor.set(open=False)
-            with salobj.assertRaisesAckError():
+                # open main door
+                harness.remote.cmd_moveShutterMainDoor.set(open=True)
                 await harness.remote.cmd_moveShutterMainDoor.start(timeout=STD_TIMEOUT)
 
-            # open the main door again (though we are already there)
-            harness.remote.cmd_moveShutterMainDoor.set(open=True)
-            await harness.remote.cmd_moveShutterMainDoor.start(timeout=STD_TIMEOUT)
+                # wait for the move to begin and check status
+                mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
 
-            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Opening)
+                shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertFalse(shutter_in_pos.inPosition)
 
-            # wait for the dropout door move to finish
-            dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(dropout_door_state.state,
-                             ATDome.ShutterDoorState.Opened)
-            # both doors are in their commanded position so shutter is in pos.
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertTrue(shutter_in_pos.inPosition)
+                # check that we cannot open or close the dropout door
+                # because the main door is not fully open
+                harness.remote.cmd_moveShutterDropoutDoor.set(open=True)
+                with salobj.assertRaisesAckError():
+                    await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
+                harness.remote.cmd_moveShutterDropoutDoor.set(open=False)
+                with salobj.assertRaisesAckError():
+                    await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
 
-            # close the main door
-            harness.remote.cmd_moveShutterMainDoor.set(open=False)
-            await harness.remote.cmd_moveShutterMainDoor.start(timeout=STD_TIMEOUT)
+                # wait for the move to end and check status
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Opened)
 
-            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Closed)
-
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Closing)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertFalse(shutter_in_pos.inPosition)
-
-            # check that we cannot open or close the dropout door
-            # because the main door is not fully open
-            harness.remote.cmd_moveShutterDropoutDoor.set(open=True)
-            with salobj.assertRaisesAckError():
-                await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
-            harness.remote.cmd_moveShutterDropoutDoor.set(open=False)
-            with salobj.assertRaisesAckError():
+                # open the dropout door
+                harness.remote.cmd_moveShutterDropoutDoor.set(open=True)
                 await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
 
-            # wait for the main door to finish closing
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Closed)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertTrue(shutter_in_pos.inPosition)
+                dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False,
+                                                                                          timeout=STD_TIMEOUT)
+                self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
 
-            # open the main door again and this time
-            # close the dropout door once we are there
-            harness.remote.cmd_moveShutterMainDoor.set(open=True)
-            await harness.remote.cmd_moveShutterMainDoor.start(timeout=STD_TIMEOUT)
+                dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(dropout_door_state.state,
+                                 ATDome.ShutterDoorState.Opening)
 
-            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
+                # make sure we can't close the main door
+                # while the dropout door is moving
+                harness.remote.cmd_moveShutterMainDoor.set(open=False)
+                with salobj.assertRaisesAckError():
+                    await harness.remote.cmd_moveShutterMainDoor.start(timeout=STD_TIMEOUT)
 
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Opening)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertFalse(shutter_in_pos.inPosition)
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Opened)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertTrue(shutter_in_pos.inPosition)
-
-            # close the dropout door
-            harness.remote.cmd_moveShutterDropoutDoor.set(open=False)
-            await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
-
-            dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False,
-                                                                                      timeout=STD_TIMEOUT)
-            self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Closed)
-
-            dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(dropout_door_state.state,
-                             ATDome.ShutterDoorState.Closing)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertFalse(shutter_in_pos.inPosition)
-
-            # make sure we can't close the main door
-            # while the dropout door is moving
-            harness.remote.cmd_moveShutterMainDoor.set(open=False)
-            with salobj.assertRaisesAckError():
+                # open the main door again (though we are already there)
+                harness.remote.cmd_moveShutterMainDoor.set(open=True)
                 await harness.remote.cmd_moveShutterMainDoor.start(timeout=STD_TIMEOUT)
 
-            # wait for the dropout door to finish closing
-            dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(dropout_door_state.state,
-                             ATDome.ShutterDoorState.Closed)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertTrue(shutter_in_pos.inPosition)
+                mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
 
-            # close the main door
-            harness.remote.cmd_moveShutterMainDoor.set(open=False)
-            await harness.remote.cmd_moveShutterMainDoor.start(timeout=STD_TIMEOUT)
+                # wait for the dropout door move to finish
+                dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(dropout_door_state.state,
+                                 ATDome.ShutterDoorState.Opened)
+                # both doors are in their commanded position
+                # so shutter is in position
+                shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertTrue(shutter_in_pos.inPosition)
 
-            mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Closed)
+                # close the main door
+                harness.remote.cmd_moveShutterMainDoor.set(open=False)
+                await harness.remote.cmd_moveShutterMainDoor.start(timeout=STD_TIMEOUT)
 
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Closing)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertFalse(shutter_in_pos.inPosition)
+                mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Closed)
 
-            # check that we cannot open or close the dropout door
-            # because the main door is not fully open
-            harness.remote.cmd_moveShutterDropoutDoor.set(open=True)
-            with salobj.assertRaisesAckError():
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Closing)
+                shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertFalse(shutter_in_pos.inPosition)
+
+                # check that we cannot open or close the dropout door
+                # because the main door is not fully open
+                harness.remote.cmd_moveShutterDropoutDoor.set(open=True)
+                with salobj.assertRaisesAckError():
+                    await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
+                harness.remote.cmd_moveShutterDropoutDoor.set(open=False)
+                with salobj.assertRaisesAckError():
+                    await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
+
+                # wait for the main door to finish closing
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Closed)
+                shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertTrue(shutter_in_pos.inPosition)
+
+                # open the main door again and this time
+                # close the dropout door once we are there
+                harness.remote.cmd_moveShutterMainDoor.set(open=True)
+                await harness.remote.cmd_moveShutterMainDoor.start(timeout=STD_TIMEOUT)
+
+                mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Opened)
+
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Opening)
+                shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertFalse(shutter_in_pos.inPosition)
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Opened)
+                shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertTrue(shutter_in_pos.inPosition)
+
+                # close the dropout door
+                harness.remote.cmd_moveShutterDropoutDoor.set(open=False)
                 await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
-            harness.remote.cmd_moveShutterDropoutDoor.set(open=False)
-            with salobj.assertRaisesAckError():
-                await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
 
-            # wait for the main door to finish closing
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Closed)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertTrue(shutter_in_pos.inPosition)
+                dropoutCmdState = await harness.remote.evt_dropoutDoorCommandedState.next(flush=False,
+                                                                                          timeout=STD_TIMEOUT)
+                self.assertEqual(dropoutCmdState.commandedState, ATDome.ShutterDoorCommandedState.Closed)
 
-            await harness.stop()
+                dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(dropout_door_state.state,
+                                 ATDome.ShutterDoorState.Closing)
+                shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertFalse(shutter_in_pos.inPosition)
+
+                # make sure we can't close the main door
+                # while the dropout door is moving
+                harness.remote.cmd_moveShutterMainDoor.set(open=False)
+                with salobj.assertRaisesAckError():
+                    await harness.remote.cmd_moveShutterMainDoor.start(timeout=STD_TIMEOUT)
+
+                # wait for the dropout door to finish closing
+                dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(dropout_door_state.state,
+                                 ATDome.ShutterDoorState.Closed)
+                shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertTrue(shutter_in_pos.inPosition)
+
+                # close the main door
+                harness.remote.cmd_moveShutterMainDoor.set(open=False)
+                await harness.remote.cmd_moveShutterMainDoor.start(timeout=STD_TIMEOUT)
+
+                mainCmdState = await harness.remote.evt_mainDoorCommandedState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(mainCmdState.commandedState, ATDome.ShutterDoorCommandedState.Closed)
+
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Closing)
+                shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertFalse(shutter_in_pos.inPosition)
+
+                # check that we cannot open or close the dropout door
+                # because the main door is not fully open
+                harness.remote.cmd_moveShutterDropoutDoor.set(open=True)
+                with salobj.assertRaisesAckError():
+                    await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
+                harness.remote.cmd_moveShutterDropoutDoor.set(open=False)
+                with salobj.assertRaisesAckError():
+                    await harness.remote.cmd_moveShutterDropoutDoor.start(timeout=STD_TIMEOUT)
+
+                # wait for the main door to finish closing
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Closed)
+                shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertTrue(shutter_in_pos.inPosition)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
     def test_stop(self):
         async def doit():
-            harness = Harness(initial_state=salobj.State.ENABLED)
-            state = await harness.remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
-            self.assertEqual(state.summaryState, salobj.State.ENABLED)
-            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
-            self.assertFalse(az_state.homing)
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Closed)
-            dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(dropout_door_state.state,
-                             ATDome.ShutterDoorState.Closed)
+            async with Harness(initial_state=salobj.State.ENABLED) as harness:
+                state = await harness.remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
+                self.assertEqual(state.summaryState, salobj.State.ENABLED)
+                az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
+                self.assertFalse(az_state.homing)
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Closed)
+                dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(dropout_door_state.state,
+                                 ATDome.ShutterDoorState.Closed)
 
-            # move azimuth and open both doors
-            harness.remote.cmd_moveAzimuth.set(azimuth=354)
-            await harness.remote.cmd_moveAzimuth.start(timeout=STD_TIMEOUT)
-            await harness.remote.cmd_openShutter.start(timeout=STD_TIMEOUT)
+                # move azimuth and open both doors
+                harness.remote.cmd_moveAzimuth.set(azimuth=354)
+                await harness.remote.cmd_moveAzimuth.start(timeout=STD_TIMEOUT)
+                await harness.remote.cmd_openShutter.start(timeout=STD_TIMEOUT)
 
-            # wait for the moves to start
-            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(az_state.state, ATDome.AzimuthState.MovingCCW)
-            self.assertFalse(az_state.homing)
-            az_in_position = await harness.remote.evt_azimuthInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertFalse(az_in_position.inPosition)
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.Opening)
-            dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(dropout_door_state.state,
-                             ATDome.ShutterDoorState.Opening)
-            shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
-                                                                             timeout=STD_TIMEOUT)
-            self.assertFalse(shutter_in_pos.inPosition)
+                # wait for the moves to start
+                az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(az_state.state, ATDome.AzimuthState.MovingCCW)
+                self.assertFalse(az_state.homing)
+                az_in_position = await harness.remote.evt_azimuthInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertFalse(az_in_position.inPosition)
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.Opening)
+                dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(dropout_door_state.state,
+                                 ATDome.ShutterDoorState.Opening)
+                shutter_in_pos = await harness.remote.evt_shutterInPosition.next(flush=False,
+                                                                                 timeout=STD_TIMEOUT)
+                self.assertFalse(shutter_in_pos.inPosition)
 
-            # stop all motion
-            # this should not produce new "inPosition" events, because
-            # motion is stopped while the axes are still not in position
-            await harness.remote.cmd_stopMotion.start(timeout=STD_TIMEOUT)
+                # stop all motion
+                # this should not produce new "inPosition" events, because
+                # motion is stopped while the axes are still not in position
+                await harness.remote.cmd_stopMotion.start(timeout=STD_TIMEOUT)
 
-            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
-            self.assertFalse(az_state.homing)
-            with self.assertRaises(asyncio.TimeoutError):
-                await harness.remote.evt_azimuthInPosition.next(flush=False, timeout=0.1)
-            main_door_state = await harness.remote.evt_mainDoorState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(main_door_state.state,
-                             ATDome.ShutterDoorState.PartiallyOpened)
-            dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
-                                                                                timeout=STD_TIMEOUT)
-            self.assertEqual(dropout_door_state.state,
-                             ATDome.ShutterDoorState.PartiallyOpened)
-            with self.assertRaises(asyncio.TimeoutError):
-                await harness.remote.evt_shutterInPosition.next(flush=False, timeout=0.1)
-
-            await harness.stop()
+                az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(az_state.state, ATDome.AzimuthState.NotInMotion)
+                self.assertFalse(az_state.homing)
+                with self.assertRaises(asyncio.TimeoutError):
+                    await harness.remote.evt_azimuthInPosition.next(flush=False, timeout=0.1)
+                main_door_state = await harness.remote.evt_mainDoorState.next(flush=False,
+                                                                              timeout=STD_TIMEOUT)
+                self.assertEqual(main_door_state.state,
+                                 ATDome.ShutterDoorState.PartiallyOpened)
+                dropout_door_state = await harness.remote.evt_dropoutDoorState.next(flush=False,
+                                                                                    timeout=STD_TIMEOUT)
+                self.assertEqual(dropout_door_state.state,
+                                 ATDome.ShutterDoorState.PartiallyOpened)
+                with self.assertRaises(asyncio.TimeoutError):
+                    await harness.remote.evt_shutterInPosition.next(flush=False, timeout=0.1)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -658,16 +666,17 @@ class CscTestCase(unittest.TestCase):
         async def doit():
             process = await asyncio.create_subprocess_exec(exe_name)
             try:
-                remote = salobj.Remote(SALPY_ATDome, index=1)
-                summaryState_data = await remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
-                self.assertEqual(summaryState_data.summaryState, salobj.State.STANDBY)
+                async with salobj.Domain() as domain:
+                    remote = salobj.Remote(domain=domain, name="ATDome", index=1)
+                    summaryState_data = await remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
+                    self.assertEqual(summaryState_data.summaryState, salobj.State.STANDBY)
 
-                id_ack = await remote.cmd_exitControl.start(timeout=STD_TIMEOUT)
-                self.assertEqual(id_ack.ack.ack, remote.salinfo.lib.SAL__CMD_COMPLETE)
-                summaryState_data = await remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
-                self.assertEqual(summaryState_data.summaryState, salobj.State.OFFLINE)
+                    ack = await remote.cmd_exitControl.start(timeout=STD_TIMEOUT)
+                    self.assertEqual(ack.ack, salobj.SalRetCode.CMD_COMPLETE)
+                    summaryState_data = await remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
+                    self.assertEqual(summaryState_data.summaryState, salobj.State.OFFLINE)
 
-                await asyncio.wait_for(process.wait(), 5)
+                    await asyncio.wait_for(process.wait(), 5)
             except Exception:
                 if process.returncode is None:
                     process.terminate()
