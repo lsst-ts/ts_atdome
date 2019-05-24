@@ -35,6 +35,7 @@ class MockTestCase(unittest.TestCase):
     """
     def setUp(self):
         self.port = next(port_generator)
+        self.ctrl = None
         self.writer = None
 
         async def doit():
