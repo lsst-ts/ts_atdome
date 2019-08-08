@@ -17,19 +17,6 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
-import asyncio
-import argparse
-
 from lsst.ts import ATDome
 
-
-def main():
-    parser = argparse.ArgumentParser(f"Run ATDome")
-    parser.add_argument("-s", "--simulate", action="store_true",
-                        help="Run in simuation mode?")
-    args = parser.parse_args()
-    return ATDome.ATDomeCsc(initial_simulation_mode=args.simulate)
-
-
-csc = main()
-asyncio.get_event_loop().run_until_complete(csc.done_task)
+ATDome.ATDomeCsc.main(index=None)
