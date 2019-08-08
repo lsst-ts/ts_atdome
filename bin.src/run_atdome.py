@@ -25,12 +25,10 @@ from lsst.ts import ATDome
 
 def main():
     parser = argparse.ArgumentParser(f"Run ATDome")
-    parser.add_argument("-i", "--index", type=int, default=1,
-                        help="SAL index; use the default value unless you sure you know what you are doing")
     parser.add_argument("-s", "--simulate", action="store_true",
                         help="Run in simuation mode?")
     args = parser.parse_args()
-    return ATDome.ATDomeCsc(index=args.index, initial_simulation_mode=args.simulate)
+    return ATDome.ATDomeCsc(initial_simulation_mode=args.simulate)
 
 
 csc = main()
