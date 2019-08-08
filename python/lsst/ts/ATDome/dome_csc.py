@@ -609,3 +609,18 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     @property
     def want_connection(self):
         return self.summary_state in (salobj.State.DISABLED, salobj.State.ENABLED)
+
+    @classmethod
+    def add_arguments(cls, parser):
+        super(ATDomeCsc, cls).add_arguments(parser)
+        parser.add_argument("-i", "--index", type=int, default=1,
+                            help="SAL index; use the default value "
+                                 "unless you sure you know what you are doing")
+        parser.add_argument("-s", "--simulate", action="store_true",
+                            help="Run in simuation mode?")
+
+    @classmethod
+    def add_kwargs_from_args(cls, args, kwargs):
+        super(ATDomeCsc, cls).add_kwargs_from_args(args, kwargs)
+        kwargs["index"] = args.index
+        kwargs["initial_simulation_mode"] = 1 if args.simulate else 0
