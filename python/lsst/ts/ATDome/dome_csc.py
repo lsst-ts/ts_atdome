@@ -60,8 +60,6 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
     Parameters
     ----------
-    index : `int` or `None`
-        SAL component index, or 0 or None if the component is not indexed.
     initial_state : `salobj.State` or `int` (optional)
         The initial state of the CSC. This is provided for unit testing,
         as real CSCs should start up in `lsst.ts.salobj.StateSTANDBY`,
@@ -91,7 +89,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     * 1: could not connect to TCP/IP ATDome controller
     * 2: read from TCP/IP ATDome controller timed out
     """
-    def __init__(self, index, config_dir=None, initial_state=salobj.State.STANDBY,
+    def __init__(self, config_dir=None, initial_state=salobj.State.STANDBY,
                  initial_simulation_mode=0, mock_port=None):
         schema_path = pathlib.Path(__file__).resolve().parents[4].joinpath("schema", "ATDome.yaml")
 
@@ -110,7 +108,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.config = None
         self.mock_port = mock_port
         self.defer_simulation_mode_until_configured = False
-        super().__init__("ATDome", index=index, schema_path=schema_path, config_dir=config_dir,
+        super().__init__("ATDome", index=0, schema_path=schema_path, config_dir=config_dir,
                          initial_state=initial_state, initial_simulation_mode=initial_simulation_mode)
 
     async def do_moveAzimuth(self, data):
@@ -609,3 +607,14 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     @property
     def want_connection(self):
         return self.summary_state in (salobj.State.DISABLED, salobj.State.ENABLED)
+
+    @classmethod
+    def add_arguments(cls, parser):
+        super(ATDomeCsc, cls).add_arguments(parser)
+        parser.add_argument("-s", "--simulate", action="store_true",
+                            help="Run in simuation mode?")
+
+    @classmethod
+    def add_kwargs_from_args(cls, args, kwargs):
+        super(ATDomeCsc, cls).add_kwargs_from_args(args, kwargs)
+        kwargs["initial_simulation_mode"] = 1 if args.simulate else 0

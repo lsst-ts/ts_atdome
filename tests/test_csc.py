@@ -45,13 +45,12 @@ port_generator = salobj.index_generator(imin=3200)
 class Harness:
     def __init__(self, initial_state, config_dir=None):
         salobj.test_utils.set_random_lsst_dds_domain()
-        self.index = 1
         self.csc = ATDome.ATDomeCsc(
-            index=self.index, config_dir=config_dir,
+            config_dir=config_dir,
             initial_state=initial_state,
             initial_simulation_mode=1,
             mock_port=next(port_generator))
-        self.remote = salobj.Remote(domain=self.csc.domain, name="ATDome", index=self.index)
+        self.remote = salobj.Remote(domain=self.csc.domain, name="ATDome", index=0)
 
     async def __aenter__(self):
         await self.csc.start_task
@@ -669,7 +668,7 @@ class CscTestCase(unittest.TestCase):
             process = await asyncio.create_subprocess_exec(exe_name)
             try:
                 async with salobj.Domain() as domain:
-                    remote = salobj.Remote(domain=domain, name="ATDome", index=1)
+                    remote = salobj.Remote(domain=domain, name="ATDome", index=0)
                     summaryState_data = await remote.evt_summaryState.next(flush=False, timeout=LONG_TIMEOUT)
                     self.assertEqual(summaryState_data.summaryState, salobj.State.STANDBY)
 
