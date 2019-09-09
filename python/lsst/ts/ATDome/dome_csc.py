@@ -110,6 +110,13 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.status_task = salobj.make_done_future()
         # Task that waits while connecting to the TCP/IP controller.
         self.connect_task = salobj.make_done_future()
+        # Task that waits while shutter doors move
+        self.shutter_task = salobj.make_done_future()
+        # The conditions that self.shutter_task is waiting for.
+        # Must be one of: ShutterDoorState.OPENED,
+        # ShutterDoorState.CLOSED or None (for don't care)
+        self.desired_main_shutter_state = None
+        self.desired_dropout_shutter_state = None
         self.cmd_lock = asyncio.Lock()
         self.config = None
         self.mock_port = mock_port
@@ -133,12 +140,14 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     async def do_closeShutter(self, data):
         """Implement the ``closeShutter`` command."""
         self.assert_enabled("closeShutter")
+        self.shutter_task.cancel()
         await self.run_command("SC")
         self.evt_dropoutDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.CLOSED,
                                                    force_output=True)
         self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.CLOSED,
                                                 force_output=True)
-        self.status_sleep_task.cancel()
+        await self.wait_for_shutter(dropout_state=ShutterDoorState.CLOSED,
+                                    main_state=ShutterDoorState.CLOSED)
 
     async def do_openShutter(self, data):
         """Implement the ``openShutter`` command."""
@@ -148,7 +157,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                                                    force_output=True)
         self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.OPENED,
                                                 force_output=True)
-        self.status_sleep_task.cancel()
+        await self.wait_for_shutter(dropout_state=ShutterDoorState.OPENED,
+                                    main_state=ShutterDoorState.OPENED)
 
     async def do_stopMotion(self, data):
         """Implement the ``stopMotion`` command."""
@@ -160,6 +170,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.STOP,
                                                 force_output=True)
         await self.run_command("ST")
+        self.shutter_task.cancel()
         self.status_sleep_task.cancel()
 
     async def do_homeAzimuth(self, data):
@@ -185,7 +196,10 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             self.evt_dropoutDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.CLOSED,
                                                        force_output=True)
             await self.run_command("UP")
-        self.status_sleep_task.cancel()
+
+        await self.wait_for_shutter(
+            dropout_state=ShutterDoorState.OPENED if data.open else ShutterDoorState.CLOSED,
+            main_state=None)
 
     async def do_moveShutterMainDoor(self, data):
         """Implement the ``moveShutterMainDoor`` command."""
@@ -203,7 +217,10 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.CLOSED,
                                                     force_output=True)
             await self.run_command("CL")
-        self.status_sleep_task.cancel()
+
+        await self.wait_for_shutter(
+            dropout_state=None,
+            main_state=ShutterDoorState.OPENED if data.open else ShutterDoorState.CLOSED)
 
     async def run_command(self, cmd):
         """Send a command to the TCP/IP controller and process its replies.
@@ -480,7 +497,49 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.evt_shutterInPosition.set_put(inPosition=shutter_in_position)
         self.evt_allAxesInPosition.set_put(inPosition=azimuth_in_position and shutter_in_position)
 
+        if not self.shutter_task.done():
+            end_shutter_task = True
+            if self.desired_dropout_shutter_state is not None:
+                if self.desired_dropout_shutter_state != dropout_door_state:
+                    end_shutter_task = False
+            if self.desired_main_shutter_state is not None:
+                if self.desired_main_shutter_state != main_door_state:
+                    end_shutter_task = False
+            if end_shutter_task:
+                self.shutter_task.set_result(None)
+
         return settings_updated
+
+    async def wait_for_shutter(self, *, dropout_state, main_state):
+        """Wait for the shutter doors to move to a specified position.
+
+        Cancel an existing wait, if any, trigger a status update,
+        and let the status update set self.shutter_task done.
+
+        Parameters
+        ----------
+        dropout_state : `lsst.ts.idl.enums.ATDome.ShutterDoorState` or `None`
+            Desired state of dropout door.
+        main_state : `lsst.ts.idl.enums.ATDome.ShutterDoorState` or `None`
+            Desired state of main door.
+
+        Notes
+        -----
+        Triggers an immediate status update.
+        """
+        allowed_values = (ShutterDoorState.OPENED, ShutterDoorState.CLOSED, None)
+        if dropout_state not in allowed_values:
+            raise ValueError(f"dropout_state={dropout_state!r}; must be one of {allowed_values}")
+        if main_state not in allowed_values:
+            raise ValueError(f"main_state={main_state!r}; must be one of {allowed_values}")
+        if dropout_state is None and main_state is None:
+            raise ValueError(f"dropout_state and main_state cannot both be None")
+        self.shutter_task.cancel()
+        self.desired_dropout_shutter_state = dropout_state
+        self.desired_main_shutter_state = main_state
+        self.shutter_task = asyncio.Future()
+        self.status_sleep_task.cancel()
+        await self.shutter_task
 
     def handle_full_status(self, lines):
         """Handle output of "+" command.
