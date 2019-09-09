@@ -721,6 +721,75 @@ class CscTestCase(asynctest.TestCase):
                 shutter_in_position=True,
             )
 
+    async def test_disable(self):
+        """Test that disable halts az and closes the shutter.
+
+        And that it aborts an outstanding shutter command.
+        """
+        async with Harness(initial_state=salobj.State.ENABLED) as harness:
+            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
+            self.assertEqual(az_state.state, AzimuthState.NOTINMOTION)
+            self.assertFalse(az_state.homing)
+            await self.check_initial_shutter_events(harness)
+
+            # move azimuth and start opening the shutter
+            await harness.remote.cmd_moveAzimuth.set_start(azimuth=354, timeout=STD_TIMEOUT)
+            shutter_open_task = asyncio.ensure_future(
+                harness.remote.cmd_openShutter.start(timeout=STD_TIMEOUT))
+
+            # wait for the moves to start
+            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
+            self.assertEqual(az_state.state, AzimuthState.MOVINGCCW)
+            self.assertFalse(az_state.homing)
+            az_in_position = await harness.remote.evt_azimuthInPosition.next(flush=False,
+                                                                             timeout=STD_TIMEOUT)
+            self.assertFalse(az_in_position.inPosition)
+
+            # check that the shutter was told to open;
+            # shutter_in_position remains false so is not output
+            await self.check_shutter_events(
+                harness=harness,
+                dropout_door_cmd_state=ShutterDoorCommandedState.OPENED,
+                main_door_cmd_state=ShutterDoorCommandedState.OPENED,
+                dropout_door_state=ShutterDoorState.OPENING,
+                main_door_state=ShutterDoorState.OPENING,
+            )
+
+            # disable the CSC
+            # this should not produce new "inPosition" events, because
+            # motion is stopped while the axes are still not in position
+            await harness.remote.cmd_disable.start(timeout=STD_TIMEOUT)
+
+            # make sure the shutter command was cancelled
+            with salobj.assertRaisesAckError(ack=salobj.SalRetCode.CMD_ABORTED):
+                await shutter_open_task
+
+            az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)
+            self.assertEqual(az_state.state, AzimuthState.NOTINMOTION)
+            self.assertFalse(az_state.homing)
+            with self.assertRaises(asyncio.TimeoutError):
+                await harness.remote.evt_azimuthInPosition.next(flush=False, timeout=0.1)
+
+            # check that the shutter was told to close;
+            # shutter_in_position remains false so is not output
+            await self.check_shutter_events(
+                harness=harness,
+                dropout_door_cmd_state=ShutterDoorCommandedState.CLOSED,
+                main_door_cmd_state=ShutterDoorCommandedState.CLOSED,
+                dropout_door_state=ShutterDoorState.CLOSING,
+                main_door_state=ShutterDoorState.CLOSING,
+            )
+            with self.assertRaises(asyncio.TimeoutError):
+                await harness.remote.evt_shutterInPosition.next(flush=False, timeout=0.1)
+
+            # check that the shutter closed
+            await self.check_shutter_events(
+                harness=harness,
+                dropout_door_state=ShutterDoorState.CLOSED,
+                main_door_state=ShutterDoorState.CLOSED,
+                shutter_in_position=True,
+            )
+
     async def test_stop(self):
         async with Harness(initial_state=salobj.State.ENABLED) as harness:
             az_state = await harness.remote.evt_azimuthState.next(flush=False, timeout=STD_TIMEOUT)

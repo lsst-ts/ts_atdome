@@ -428,6 +428,35 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             return False
         return True
 
+    async def end_disable(self, data):
+        """End do_disable; called after state changes
+        but before command acknowledged.
+
+        Stop azimuth motion and close the shutters, then disconnect.
+
+        Parameters
+        ----------
+        data : `DataType`
+            Command data
+        """
+        self.shutter_task.cancel()
+        if not self.connected:
+            # this should never happen, but be paranoid
+            return
+
+        # halt all motion (we just want to stop azimuth,
+        # but there is no way to do that)
+        self.evt_azimuthCommandedState.set_put(commandedState=AzimuthCommandedState.STOP,
+                                               force_output=True)
+        await self.run_command("ST")
+        # close the shutter
+        self.evt_dropoutDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.CLOSED,
+                                                   force_output=True)
+        self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.CLOSED,
+                                                force_output=True)
+        await self.run_command("SC")
+        self.status_sleep_task.cancel()
+
     async def disconnect(self):
         """Disconnect from the dome controller's TCP/IP port.
         """
