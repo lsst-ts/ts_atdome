@@ -58,3 +58,10 @@ Python API reference
 .. automodapi:: lsst.ts.ATDome
    :no-main-docstr:
    :no-inheritance-diagram:
+
+Revision History
+================
+
+.. toctree::
+    revision_history
+    :maxdepth: 1
