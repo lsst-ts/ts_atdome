@@ -88,6 +88,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
     * 1: could not connect to TCP/IP ATDome controller
     * 2: read from TCP/IP ATDome controller timed out
+    * 3: could not start the mock controller
     """
     def __init__(self, config_dir=None, initial_state=salobj.State.STANDBY,
                  initial_simulation_mode=0, mock_port=None):
@@ -120,7 +121,6 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.cmd_lock = asyncio.Lock()
         self.config = None
         self.mock_port = mock_port
-        self.defer_simulation_mode_until_configured = False
         super().__init__("ATDome", index=0, schema_path=schema_path, config_dir=config_dir,
                          initial_state=initial_state, initial_simulation_mode=initial_simulation_mode)
 
@@ -386,12 +386,11 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             readTimeout=self.config.read_timeout,
             force_output=True,
         )
-        if self.defer_simulation_mode_until_configured:
-            self.defer_simulation_mode_until_configured = False
-            await self._handle_simulation_mode(self.simulation_mode)
 
     async def connect(self):
         """Connect to the dome controller's TCP/IP port.
+
+        Start the mock controller, if simulating.
         """
         self.log.debug("connect")
         if self.config is None:
@@ -399,6 +398,11 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         if self.connected:
             raise RuntimeError("Already connected")
         host = _LOCAL_HOST if self.simulation_mode == 1 else self.config.host
+        if self.simulation_mode == 1:
+            await self.start_mock_ctrl()
+            host = _LOCAL_HOST
+        else:
+            host = self.config.host
         try:
             async with self.cmd_lock:
                 if self.simulation_mode != 0:
@@ -416,8 +420,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         except Exception as e:
             err_msg = f"Could not open connection to host={host}, port={self.config.port}"
             self.log.exception(err_msg)
-            self.summary_state = salobj.State.FAULT
-            self.evt_errorCode.set_put(errorCode=1, errorReport=f"{err_msg}: {e}", force_output=True)
+            self.fault(code=1, report=f"{err_msg}: {e}")
             return
 
         self.status_task = asyncio.ensure_future(self.status_loop())
@@ -458,9 +461,11 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.status_sleep_task.cancel()
 
     async def disconnect(self):
-        """Disconnect from the dome controller's TCP/IP port.
+        """Disconnect from the TCP/IP controller, if connected, and stop
+        the mock controller, if running.
         """
         self.log.debug("disconnect")
+        self.connect_task.cancel()
         writer = self.writer
         self.reader = None
         self.writer = None
@@ -473,6 +478,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.status_sleep_task.cancel()
         if not self.status_task.done():
             await asyncio.wait_for(self.status_task, timeout=self.config.read_timeout*2)
+        await self.stop_mock_ctrl()
 
     def handle_short_status(self, lines):
         """Handle output of "?" command.
@@ -602,39 +608,32 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             raise salobj.ExpectedError(
                 f"Simulation_mode={simulation_mode} must be 0 or 1")
 
-        if self.simulation_mode == simulation_mode:
-            return
+    async def start_mock_ctrl(self):
+        """Start the mock controller.
 
-        if self.config is None:
-            self.log.debug("defer_simulation_mode_until_configured")
-            self.defer_simulation_mode_until_configured = True
-            return
-
-        await self._handle_simulation_mode(simulation_mode)
-
-    async def _handle_simulation_mode(self, simulation_mode):
+        The simulation mode must be 1.
+        """
         try:
-            async with self.cmd_lock:
-                await self.disconnect()
-                await self.stop_mock_ctrl()
-                if simulation_mode == 1:
-                    if self.mock_port is not None:
-                        port = self.mock_port
-                    else:
-                        port = self.config.port
-                    self.mock_ctrl = MockDomeController(port=port)
-                    await asyncio.wait_for(self.mock_ctrl.start(), timeout=2)
+            assert self.simulation_mode == 1
+            if self.mock_port is not None:
+                port = self.mock_port
+            else:
+                port = self.config.port
+            self.mock_ctrl = MockDomeController(port=port)
+            await asyncio.wait_for(self.mock_ctrl.start(), timeout=2)
         except Exception as e:
+            err_msg = "Could not start mock controller"
             self.log.exception(e)
+            self.fault(code=3, report=f"{err_msg}: {e}")
             raise
 
     def report_summary_state(self):
         super().report_summary_state()
-        if self.connected != self.want_connection:
-            if self.want_connection and self.connect_task.done():
+        if self.want_connection:
+            if not self.connected and self.connect_task.done():
                 self.connect_task = asyncio.ensure_future(self.connect())
-            else:
-                asyncio.ensure_future(self.disconnect())
+        else:
+            asyncio.ensure_future(self.disconnect())
 
     async def start(self):
         await super().start()
@@ -666,16 +665,14 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 pass
 
     async def close_tasks(self):
-        """Disconnect from the TCP/IP controller and stop the mock controller.
+        """Disconnect from the TCP/IP controller, if connected, and stop
+        the mock controller, if running.
         """
         await super().close_tasks()
         await self.disconnect()
-        await self.stop_mock_ctrl()
 
     async def stop_mock_ctrl(self):
-        """Stop the mock controller, if present.
-
-        Safe to call even if there is no mock controller.
+        """Stop the mock controller, if running.
         """
         mock_ctrl = self.mock_ctrl
         self.mock_ctrl = None
