@@ -47,7 +47,6 @@ port_generator = salobj.index_generator(imin=3200)
 
 class Harness:
     def __init__(self, initial_state, config_dir=None):
-        salobj.test_utils.set_random_lsst_dds_domain()
         self.csc = ATDome.ATDomeCsc(
             config_dir=config_dir,
             initial_state=initial_state,
@@ -61,10 +60,14 @@ class Harness:
         return self
 
     async def __aexit__(self, *args):
+        await self.remote.close()
         await self.csc.close()
 
 
 class CscTestCase(asynctest.TestCase):
+    def setUp(self):
+        salobj.set_random_lsst_dds_domain()
+
     async def test_initial_info(self):
         async with Harness(initial_state=salobj.State.ENABLED) as harness:
             state = await harness.remote.evt_summaryState.next(flush=False, timeout=STD_TIMEOUT)
@@ -118,7 +121,7 @@ class CscTestCase(asynctest.TestCase):
             bad_config_names.append("no_such_file.yaml")
             for bad_config_name in bad_config_names:
                 with self.subTest(bad_config_name=bad_config_name):
-                    with salobj.test_utils.assertRaisesAckError():
+                    with salobj.assertRaisesAckError():
                         await harness.remote.cmd_start.set_start(settingsToApply=bad_config_name,
                                                                  timeout=STD_TIMEOUT)
 
@@ -221,7 +224,7 @@ class CscTestCase(asynctest.TestCase):
 
             # try several invalid values for azimuth
             for bad_az in (-0.001, 360.001):
-                with salobj.test_utils.assertRaisesAckError():
+                with salobj.assertRaisesAckError():
                     await harness.remote.cmd_moveAzimuth.set_start(azimuth=bad_az, timeout=STD_TIMEOUT)
 
     async def test_move_shutter(self):
@@ -848,7 +851,7 @@ class CscTestCase(asynctest.TestCase):
                 await harness.remote.evt_shutterInPosition.next(flush=False, timeout=0.1)
 
     async def test_run(self):
-        salobj.test_utils.set_random_lsst_dds_domain()
+        salobj.set_random_lsst_dds_domain()
         exe_name = "run_atdome.py"
         exe_path = shutil.which(exe_name)
         if exe_path is None:
