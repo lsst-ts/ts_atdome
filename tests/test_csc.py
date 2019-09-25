@@ -47,7 +47,6 @@ port_generator = salobj.index_generator(imin=3200)
 
 class Harness:
     def __init__(self, initial_state, config_dir=None):
-        salobj.set_random_lsst_dds_domain()
         self.csc = ATDome.ATDomeCsc(
             config_dir=config_dir,
             initial_state=initial_state,
@@ -61,10 +60,14 @@ class Harness:
         return self
 
     async def __aexit__(self, *args):
+        await self.remote.close()
         await self.csc.close()
 
 
 class CscTestCase(asynctest.TestCase):
+    def setUp(self):
+        salobj.set_random_lsst_dds_domain()
+
     async def test_initial_info(self):
         async with Harness(initial_state=salobj.State.ENABLED) as harness:
             state = await harness.remote.evt_summaryState.next(flush=False, timeout=STD_TIMEOUT)
