@@ -31,7 +31,6 @@ import astropy.units as u
 from lsst.ts import salobj
 from lsst.ts.idl.enums.ATDome import AzimuthCommandedState, AzimuthState, \
     ShutterDoorCommandedState, ShutterDoorState
-from .utils import angle_diff
 from .mock_controller import MockDomeController
 from .status import ShortStatus, RemainingStatus
 
@@ -287,8 +286,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         az_halted = move_code & (MoveCode.AZPOSITIVE | MoveCode.AZNEGATIVE) == 0
         if az_halted and \
                 self.evt_azimuthCommandedState.data.commandedState == AzimuthCommandedState.GOTOPOSITION:
-            daz = angle_diff(self.tel_position.data.azimuthPosition,
-                             self.evt_azimuthCommandedState.data.azimuth)
+            daz = salobj.angle_diff(self.tel_position.data.azimuthPosition,
+                                    self.evt_azimuthCommandedState.data.azimuth)
             if abs(daz) < self.az_tolerance:
                 mask |= Axis.AZ
 
