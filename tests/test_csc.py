@@ -25,9 +25,9 @@ import os
 import pathlib
 import shutil
 import unittest
-import yaml
 
 import asynctest
+import yaml
 
 from astropy.coordinates import Angle
 import astropy.units as u
