@@ -231,7 +231,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             The command to send, e.g. "5.0 MV", "SO" or "?".
         """
         if not self.connected:
-            if self.want_connection and not self.connect_task.done():
+            if self.disabled_or_enabled and not self.connect_task.done():
                 await self.connect_task
             else:
                 raise RuntimeError("Not connected and not trying to connect")
@@ -629,7 +629,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
     def report_summary_state(self):
         super().report_summary_state()
-        if self.want_connection:
+        if self.disabled_or_enabled:
             if not self.connected and self.connect_task.done():
                 self.connect_task = asyncio.ensure_future(self.connect())
         else:
@@ -678,10 +678,6 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.mock_ctrl = None
         if mock_ctrl:
             await mock_ctrl.stop()
-
-    @property
-    def want_connection(self):
-        return self.summary_state in (salobj.State.DISABLED, salobj.State.ENABLED)
 
     @classmethod
     def add_arguments(cls, parser):
