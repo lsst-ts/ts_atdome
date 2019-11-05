@@ -29,7 +29,7 @@ import time
 from astropy.coordinates import Angle
 import astropy.units as u
 
-from .utils import angle_diff
+from lsst.ts import salobj
 
 logging.basicConfig()
 
@@ -137,10 +137,10 @@ class AzActuator(Actuator):
     @property
     def direction(self):
         """1 if moving or moved to greater azimuth, -1 otherwise."""
-        return 1 if angle_diff(self.end_pos, self.start_pos) > 0 else -1
+        return 1 if salobj.angle_diff(self.end_pos, self.start_pos) > 0 else -1
 
     def _move_duration(self):
-        return abs(angle_diff(self.end_pos, self.start_pos)) / self.speed
+        return abs(salobj.angle_diff(self.end_pos, self.start_pos)) / self.speed
 
     @property
     def curr_pos(self):

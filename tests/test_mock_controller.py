@@ -21,6 +21,8 @@
 import asyncio
 import unittest
 
+import asynctest
+
 from astropy.coordinates import Angle
 import astropy.units as u
 
@@ -30,32 +32,27 @@ from lsst.ts import ATDome
 port_generator = salobj.index_generator(imin=3100)
 
 
-class MockTestCase(unittest.TestCase):
+class MockTestCase(asynctest.TestCase):
     """Test MockDomeController, ShortStatus and LongStatus
     """
-    def setUp(self):
+    async def setUp(self):
         self.port = next(port_generator)
         self.ctrl = None
         self.writer = None
 
-        async def doit():
-            self.ctrl = ATDome.MockDomeController(port=self.port)
-            await asyncio.wait_for(self.ctrl.start(), 5)
-            rw_coro = asyncio.open_connection(host="127.0.0.1", port=self.port)
-            self.reader, self.writer = await asyncio.wait_for(rw_coro, timeout=5)
-            read_bytes = await asyncio.wait_for(self.reader.readuntil(">".encode()), timeout=5)
-            read_str = read_bytes.decode().strip()
-            self.assertEqual(read_str, "ACE Main Box\n>")
-        asyncio.get_event_loop().run_until_complete(doit())
+        self.ctrl = ATDome.MockDomeController(port=self.port)
+        await asyncio.wait_for(self.ctrl.start(), 5)
+        rw_coro = asyncio.open_connection(host="127.0.0.1", port=self.port)
+        self.reader, self.writer = await asyncio.wait_for(rw_coro, timeout=5)
+        read_bytes = await asyncio.wait_for(self.reader.readuntil(">".encode()), timeout=5)
+        read_str = read_bytes.decode().strip()
+        self.assertEqual(read_str, "ACE Main Box\n>")
 
-    def tearDown(self):
-        async def doit():
-            if self.ctrl:
-                await asyncio.wait_for(self.ctrl.stop(), 5)
-            if self.writer:
-                self.writer.close()
-
-        asyncio.get_event_loop().run_until_complete(doit())
+    async def tearDown(self):
+        if self.ctrl:
+            await asyncio.wait_for(self.ctrl.stop(), 5)
+        if self.writer:
+            self.writer.close()
 
     async def send_cmd(self, cmd, timeout=2):
         """Send a command to the mock controller and wait for the reply.
@@ -70,343 +67,313 @@ class MockTestCase(unittest.TestCase):
         read_str = read_bytes.decode()[0:-1].strip()
         return read_str.split("\n")
 
-    def test_initial_short_status(self):
-        async def doit():
-            reply_lines = await self.send_cmd("?")
+    async def test_initial_short_status(self):
+        reply_lines = await self.send_cmd("?")
 
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertEqual(status.main_door_pct, 0)
-            self.assertEqual(status.dropout_door_pct, 0)
-            self.assertTrue(status.auto_shutdown_enabled)
-            self.assertEqual(status.sensor_code, 0)
-            self.assertAlmostEqual(status.az_pos.deg, 0)
-            self.assertEqual(status.move_code, 0)
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertEqual(status.main_door_pct, 0)
+        self.assertEqual(status.dropout_door_pct, 0)
+        self.assertTrue(status.auto_shutdown_enabled)
+        self.assertEqual(status.sensor_code, 0)
+        self.assertAlmostEqual(status.az_pos.deg, 0)
+        self.assertEqual(status.move_code, 0)
 
-        asyncio.get_event_loop().run_until_complete(doit())
+    async def test_initial_full_status(self):
+        reply_lines = await self.send_cmd("+")
 
-    def test_initial_full_status(self):
-        async def doit():
-            reply_lines = await self.send_cmd("+")
+        status = ATDome.ShortStatus(reply_lines[0:5])
+        self.assertEqual(status.main_door_pct, 0)
+        self.assertEqual(status.dropout_door_pct, 0)
+        self.assertTrue(status.auto_shutdown_enabled)
+        self.assertEqual(status.sensor_code, 0)
+        self.assertAlmostEqual(status.az_pos.deg, 0)
+        self.assertEqual(status.move_code, 0)
 
-            status = ATDome.ShortStatus(reply_lines[0:5])
-            self.assertEqual(status.main_door_pct, 0)
-            self.assertEqual(status.dropout_door_pct, 0)
-            self.assertTrue(status.auto_shutdown_enabled)
-            self.assertEqual(status.sensor_code, 0)
-            self.assertAlmostEqual(status.az_pos.deg, 0)
-            self.assertEqual(status.move_code, 0)
+        rem_status = ATDome.RemainingStatus(reply_lines)
+        self.assertFalse(rem_status.estop_active)
+        self.assertTrue(rem_status.scb_link_ok)
+        self.assertTrue(rem_status.rain_sensor_enabled)
+        self.assertTrue(rem_status.cloud_sensor_enabled)
+        self.assertAlmostEqual(rem_status.tolerance.deg, 1)
+        self.assertAlmostEqual(rem_status.home_azimuth.deg, self.ctrl.home_az.deg)
+        self.assertAlmostEqual(rem_status.high_speed.deg, 6)
+        self.assertAlmostEqual(rem_status.watchdog_timer, 600)
+        self.assertAlmostEqual(rem_status.reversal_delay, 2)
 
-            rem_status = ATDome.RemainingStatus(reply_lines)
-            self.assertFalse(rem_status.estop_active)
-            self.assertTrue(rem_status.scb_link_ok)
-            self.assertTrue(rem_status.rain_sensor_enabled)
-            self.assertTrue(rem_status.cloud_sensor_enabled)
-            self.assertAlmostEqual(rem_status.tolerance.deg, 1)
-            self.assertAlmostEqual(rem_status.home_azimuth.deg, self.ctrl.home_az.deg)
-            self.assertAlmostEqual(rem_status.high_speed.deg, 6)
-            self.assertAlmostEqual(rem_status.watchdog_timer, 600)
-            self.assertAlmostEqual(rem_status.reversal_delay, 2)
+    async def test_move_az(self):
+        daz = -3
+        az = 360 + daz
+        est_duration = abs(daz / self.ctrl.az_vel.deg)
+        reply_lines = await self.send_cmd(f"{az:0.2f} MV")
+        self.assertEqual(reply_lines, [""])
+        await asyncio.sleep(est_duration/2)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertLess(status.az_pos.deg, 360)
+        self.assertGreater(status.az_pos.deg, 357)
+        self.assertEqual(status.move_code, 2)
 
-        asyncio.get_event_loop().run_until_complete(doit())
+        # wait long enough for the move to finish and check status
+        await asyncio.sleep(est_duration/2 + 0.5)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertAlmostEqual(status.az_pos.deg, 357)
+        self.assertEqual(status.move_code, 0)
 
-    def test_move_az(self):
-        async def doit():
-            daz = -3
-            az = 360 + daz
-            est_duration = abs(daz / self.ctrl.az_vel.deg)
-            reply_lines = await self.send_cmd(f"{az:0.2f} MV")
-            self.assertEqual(reply_lines, [""])
-            await asyncio.sleep(est_duration/2)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertLess(status.az_pos.deg, 360)
-            self.assertGreater(status.az_pos.deg, 357)
-            self.assertEqual(status.move_code, 2)
+    async def test_home_az(self):
+        daz = -2
+        est_ccw_duration = abs(daz / self.ctrl.az_vel.deg)
+        curr_az = self.ctrl.az_actuator.curr_pos
+        home_azimuth = (curr_az - 2*u.deg).wrap_at(Angle(360, u.deg))
+        self.ctrl.home_az = home_azimuth
 
-            # wait long enough for the move to finish and check status
-            await asyncio.sleep(est_duration/2 + 0.5)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertAlmostEqual(status.az_pos.deg, 357)
-            self.assertEqual(status.move_code, 0)
+        reply_lines = await self.send_cmd("HM")
+        self.assertEqual(reply_lines, [""])
 
-        asyncio.get_event_loop().run_until_complete(doit())
+        # sleep until halfway through CCW motion and check status
+        await asyncio.sleep(est_ccw_duration/2)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertEqual(status.move_code, 2 + 64)
+        self.assertAlmostEqual(self.ctrl.az_actuator.speed.deg, self.ctrl.az_vel.deg)
 
-    def test_home_az(self):
-        async def doit():
-            daz = -2
-            est_ccw_duration = abs(daz / self.ctrl.az_vel.deg)
-            curr_az = self.ctrl.az_actuator.curr_pos
-            home_azimuth = (curr_az - 2*u.deg).wrap_at(Angle(360, u.deg))
-            self.ctrl.home_az = home_azimuth
+        # sleep until halfway through CW motion and check status
+        await asyncio.sleep(self.ctrl.az_actuator.remaining_time + est_ccw_duration/2)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertEqual(status.move_code, 1 + 64)
+        self.assertAlmostEqual(self.ctrl.az_actuator.speed.deg, self.ctrl.home_az_vel.deg)
 
-            reply_lines = await self.send_cmd("HM")
-            self.assertEqual(reply_lines, [""])
+        # sleep until we're done and check status
+        await asyncio.sleep(self.ctrl.az_actuator.remaining_time + 0.1)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertEqual(status.move_code, 0)
+        self.assertAlmostEqual(self.ctrl.az_actuator.speed.deg, self.ctrl.az_vel.deg)
+        self.assertAlmostEqual(self.ctrl.az_actuator.curr_pos.deg, self.ctrl.home_az.deg)
 
-            # sleep until halfway through CCW motion and check status
-            await asyncio.sleep(est_ccw_duration/2)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertEqual(status.move_code, 2 + 64)
-            self.assertAlmostEqual(self.ctrl.az_actuator.speed.deg, self.ctrl.az_vel.deg)
+    async def test_main_door(self):
+        est_duration = self.ctrl.door_time
 
-            # sleep until halfway through CW motion and check status
-            await asyncio.sleep(self.ctrl.az_actuator.remaining_time + est_ccw_duration/2)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertEqual(status.move_code, 1 + 64)
-            self.assertAlmostEqual(self.ctrl.az_actuator.speed.deg, self.ctrl.home_az_vel.deg)
+        # open main door
+        reply_lines = await self.send_cmd("OP")
+        self.assertEqual(reply_lines, [""])
+        await asyncio.sleep(est_duration/2)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertLess(status.main_door_pct, 100)
+        self.assertGreater(status.main_door_pct, 0)
+        self.assertEqual(status.move_code, 8)
 
-            # sleep until we're done and check status
-            await asyncio.sleep(self.ctrl.az_actuator.remaining_time + 0.1)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertEqual(status.move_code, 0)
-            self.assertAlmostEqual(self.ctrl.az_actuator.speed.deg, self.ctrl.az_vel.deg)
-            self.assertAlmostEqual(self.ctrl.az_actuator.curr_pos.deg, self.ctrl.home_az.deg)
+        # wait long enough for the move to finish and check status
+        await asyncio.sleep(est_duration/2 + 0.5)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertAlmostEqual(status.main_door_pct, 100)
+        self.assertEqual(status.move_code, 0)
 
-        asyncio.get_event_loop().run_until_complete(doit())
+        # close main door
+        reply_lines = await self.send_cmd("CL")
+        self.assertEqual(reply_lines, [""])
+        await asyncio.sleep(est_duration/2)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertLess(status.main_door_pct, 100)
+        self.assertGreater(status.main_door_pct, 0)
+        self.assertEqual(status.move_code, 4)
 
-    def test_main_door(self):
-        async def doit():
-            est_duration = self.ctrl.door_time
+        # wait long enough for the move to finish and check status
+        await asyncio.sleep(est_duration/2 + 0.5)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertAlmostEqual(status.main_door_pct, 0)
+        self.assertEqual(status.move_code, 0)
 
-            # open main door
-            reply_lines = await self.send_cmd("OP")
-            self.assertEqual(reply_lines, [""])
-            await asyncio.sleep(est_duration/2)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertLess(status.main_door_pct, 100)
-            self.assertGreater(status.main_door_pct, 0)
-            self.assertEqual(status.move_code, 8)
+    async def test_dropout_door(self):
+        est_duration = self.ctrl.door_time
 
-            # wait long enough for the move to finish and check status
-            await asyncio.sleep(est_duration/2 + 0.5)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertAlmostEqual(status.main_door_pct, 100)
-            self.assertEqual(status.move_code, 0)
+        # open dropout door
+        reply_lines = await self.send_cmd("DN")
+        self.assertEqual(reply_lines, [""])
+        await asyncio.sleep(est_duration/2)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertLess(status.dropout_door_pct, 100)
+        self.assertGreater(status.dropout_door_pct, 0)
+        self.assertEqual(status.move_code, 32)
 
-            # close main door
-            reply_lines = await self.send_cmd("CL")
-            self.assertEqual(reply_lines, [""])
-            await asyncio.sleep(est_duration/2)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertLess(status.main_door_pct, 100)
-            self.assertGreater(status.main_door_pct, 0)
-            self.assertEqual(status.move_code, 4)
+        # wait long enough for the move to finish and check status
+        await asyncio.sleep(est_duration/2 + 0.5)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertAlmostEqual(status.dropout_door_pct, 100)
+        self.assertEqual(status.move_code, 0)
 
-            # wait long enough for the move to finish and check status
-            await asyncio.sleep(est_duration/2 + 0.5)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertAlmostEqual(status.main_door_pct, 0)
-            self.assertEqual(status.move_code, 0)
+        # close dropout door
+        reply_lines = await self.send_cmd("UP")
+        self.assertEqual(reply_lines, [""])
+        await asyncio.sleep(est_duration/2)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertLess(status.dropout_door_pct, 100)
+        self.assertGreater(status.dropout_door_pct, 0)
+        self.assertEqual(status.move_code, 16)
 
-        asyncio.get_event_loop().run_until_complete(doit())
+        # wait long enough for the move to finish and check status
+        await asyncio.sleep(est_duration/2 + 0.5)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertAlmostEqual(status.dropout_door_pct, 0)
+        self.assertEqual(status.move_code, 0)
 
-    def test_dropout_door(self):
-        async def doit():
-            est_duration = self.ctrl.door_time
+    async def test_simultaneous_door_motion(self):
+        est_duration = self.ctrl.door_time
 
-            # open dropout door
-            reply_lines = await self.send_cmd("DN")
-            self.assertEqual(reply_lines, [""])
-            await asyncio.sleep(est_duration/2)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertLess(status.dropout_door_pct, 100)
-            self.assertGreater(status.dropout_door_pct, 0)
-            self.assertEqual(status.move_code, 32)
+        # open both doors
+        reply_lines = await self.send_cmd("SO")
+        self.assertEqual(reply_lines, [""])
+        await asyncio.sleep(est_duration/2)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertLess(status.main_door_pct, 100)
+        self.assertGreater(status.main_door_pct, 0)
+        self.assertLess(status.dropout_door_pct, 100)
+        self.assertGreater(status.dropout_door_pct, 0)
+        self.assertEqual(status.move_code, 8 + 32)
 
-            # wait long enough for the move to finish and check status
-            await asyncio.sleep(est_duration/2 + 0.5)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertAlmostEqual(status.dropout_door_pct, 100)
-            self.assertEqual(status.move_code, 0)
+        # wait long enough for the move to finish and check status
+        await asyncio.sleep(est_duration/2 + 0.5)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertAlmostEqual(status.main_door_pct, 100)
+        self.assertAlmostEqual(status.dropout_door_pct, 100)
+        self.assertEqual(status.move_code, 0)
 
-            # close dropout door
-            reply_lines = await self.send_cmd("UP")
-            self.assertEqual(reply_lines, [""])
-            await asyncio.sleep(est_duration/2)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertLess(status.dropout_door_pct, 100)
-            self.assertGreater(status.dropout_door_pct, 0)
-            self.assertEqual(status.move_code, 16)
+        # close dropout door
+        reply_lines = await self.send_cmd("SC")
+        self.assertEqual(reply_lines, [""])
+        await asyncio.sleep(est_duration/2)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertLess(status.main_door_pct, 100)
+        self.assertGreater(status.main_door_pct, 0)
+        self.assertLess(status.dropout_door_pct, 100)
+        self.assertGreater(status.dropout_door_pct, 0)
+        self.assertEqual(status.move_code, 4 + 16)
 
-            # wait long enough for the move to finish and check status
-            await asyncio.sleep(est_duration/2 + 0.5)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertAlmostEqual(status.dropout_door_pct, 0)
-            self.assertEqual(status.move_code, 0)
+        # wait long enough for the move to finish and check status
+        await asyncio.sleep(est_duration/2 + 0.5)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertAlmostEqual(status.main_door_pct, 0)
+        self.assertAlmostEqual(status.dropout_door_pct, 0)
+        self.assertEqual(status.move_code, 0)
 
-        asyncio.get_event_loop().run_until_complete(doit())
+    async def test_stop(self):
+        est_duration = self.ctrl.door_time
+        daz = self.ctrl.az_vel * est_duration
+        az = daz
 
-    def test_simultaneous_door_motion(self):
-        async def doit():
-            est_duration = self.ctrl.door_time
+        # start azimuth motion
+        reply_lines = await self.send_cmd(f"{az.deg:0.2f} MV")
+        # open both doors
+        reply_lines = await self.send_cmd("SO")
+        self.assertEqual(reply_lines, [""])
 
-            # open both doors
-            reply_lines = await self.send_cmd("SO")
-            self.assertEqual(reply_lines, [""])
-            await asyncio.sleep(est_duration/2)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertLess(status.main_door_pct, 100)
-            self.assertGreater(status.main_door_pct, 0)
-            self.assertLess(status.dropout_door_pct, 100)
-            self.assertGreater(status.dropout_door_pct, 0)
-            self.assertEqual(status.move_code, 8 + 32)
+        # wait for the moves to get about halfway and stop
+        await asyncio.sleep(est_duration/2)
+        reply_lines = await self.send_cmd("ST")
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertLess(status.az_pos.deg, az.deg)
+        self.assertGreater(status.az_pos.deg, 0)
+        self.assertLess(status.main_door_pct, 100)
+        self.assertGreater(status.main_door_pct, 0)
+        self.assertLess(status.dropout_door_pct, 100)
+        self.assertGreater(status.dropout_door_pct, 0)
+        self.assertEqual(status.move_code, 0)
 
-            # wait long enough for the move to finish and check status
-            await asyncio.sleep(est_duration/2 + 0.5)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertAlmostEqual(status.main_door_pct, 100)
-            self.assertAlmostEqual(status.dropout_door_pct, 100)
-            self.assertEqual(status.move_code, 0)
+    async def test_short_status(self):
+        self.ctrl.auto_shutdown_enabled = False
 
-            # close dropout door
-            reply_lines = await self.send_cmd("SC")
-            self.assertEqual(reply_lines, [""])
-            await asyncio.sleep(est_duration/2)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertLess(status.main_door_pct, 100)
-            self.assertGreater(status.main_door_pct, 0)
-            self.assertLess(status.dropout_door_pct, 100)
-            self.assertGreater(status.dropout_door_pct, 0)
-            self.assertEqual(status.move_code, 4 + 16)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertFalse(status.auto_shutdown_enabled)
+        self.assertEqual(status.sensor_code, 0)
+        self.assertEqual(status.move_code, 0)
 
-            # wait long enough for the move to finish and check status
-            await asyncio.sleep(est_duration/2 + 0.5)
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertAlmostEqual(status.main_door_pct, 0)
-            self.assertAlmostEqual(status.dropout_door_pct, 0)
-            self.assertEqual(status.move_code, 0)
+        self.ctrl.auto_shutdown_enabled = True
+        self.ctrl.rain_detected = True
 
-        asyncio.get_event_loop().run_until_complete(doit())
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertTrue(status.auto_shutdown_enabled)
+        self.assertEqual(status.sensor_code, 1)
+        self.assertEqual(status.move_code, 0)
 
-    def test_stop(self):
-        async def doit():
-            est_duration = self.ctrl.door_time
-            daz = self.ctrl.az_vel * est_duration
-            az = daz
+        self.ctrl.clouds_detected = True
 
-            # start azimuth motion
-            reply_lines = await self.send_cmd(f"{az.deg:0.2f} MV")
-            # open both doors
-            reply_lines = await self.send_cmd("SO")
-            self.assertEqual(reply_lines, [""])
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertTrue(status.auto_shutdown_enabled)
+        self.assertEqual(status.sensor_code, 3)
+        self.assertEqual(status.move_code, 0)
 
-            # wait for the moves to get about halfway and stop
-            await asyncio.sleep(est_duration/2)
-            reply_lines = await self.send_cmd("ST")
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertLess(status.az_pos.deg, az.deg)
-            self.assertGreater(status.az_pos.deg, 0)
-            self.assertLess(status.main_door_pct, 100)
-            self.assertGreater(status.main_door_pct, 0)
-            self.assertLess(status.dropout_door_pct, 100)
-            self.assertGreater(status.dropout_door_pct, 0)
-            self.assertEqual(status.move_code, 0)
+        self.ctrl.rain_detected = False
 
-        asyncio.get_event_loop().run_until_complete(doit())
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertTrue(status.auto_shutdown_enabled)
+        self.assertEqual(status.sensor_code, 2)
+        self.assertEqual(status.move_code, 0)
 
-    def test_short_status(self):
-        async def doit():
-            self.ctrl.auto_shutdown_enabled = False
+        self.ctrl.clouds_detected = False
+        self.ctrl.estop_active = True
 
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertFalse(status.auto_shutdown_enabled)
-            self.assertEqual(status.sensor_code, 0)
-            self.assertEqual(status.move_code, 0)
+        reply_lines = await self.send_cmd("?")
+        status = ATDome.ShortStatus(reply_lines)
+        self.assertTrue(status.auto_shutdown_enabled)
+        self.assertEqual(status.move_code, 128)
 
-            self.ctrl.auto_shutdown_enabled = True
-            self.ctrl.rain_detected = True
+    async def test_long_status(self):
+        self.ctrl.rain_enabled = False
 
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertTrue(status.auto_shutdown_enabled)
-            self.assertEqual(status.sensor_code, 1)
-            self.assertEqual(status.move_code, 0)
+        reply_lines = await self.send_cmd("+")
+        rem_status = ATDome.RemainingStatus(reply_lines)
+        self.assertFalse(rem_status.estop_active)
+        self.assertTrue(rem_status.scb_link_ok)
+        self.assertFalse(rem_status.rain_sensor_enabled)
+        self.assertTrue(rem_status.cloud_sensor_enabled)
 
-            self.ctrl.clouds_detected = True
+        self.ctrl.rain_enabled = True
+        self.ctrl.clouds_enabled = False
 
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertTrue(status.auto_shutdown_enabled)
-            self.assertEqual(status.sensor_code, 3)
-            self.assertEqual(status.move_code, 0)
+        reply_lines = await self.send_cmd("+")
+        rem_status = ATDome.RemainingStatus(reply_lines)
+        self.assertFalse(rem_status.estop_active)
+        self.assertTrue(rem_status.scb_link_ok)
+        self.assertTrue(rem_status.rain_sensor_enabled)
+        self.assertFalse(rem_status.cloud_sensor_enabled)
 
-            self.ctrl.rain_detected = False
+        self.ctrl.clouds_enabled = True
+        self.ctrl.scb_link_ok = False
 
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertTrue(status.auto_shutdown_enabled)
-            self.assertEqual(status.sensor_code, 2)
-            self.assertEqual(status.move_code, 0)
+        reply_lines = await self.send_cmd("+")
+        rem_status = ATDome.RemainingStatus(reply_lines)
+        self.assertFalse(rem_status.estop_active)
+        self.assertFalse(rem_status.scb_link_ok)
+        self.assertTrue(rem_status.rain_sensor_enabled)
+        self.assertTrue(rem_status.cloud_sensor_enabled)
 
-            self.ctrl.clouds_detected = False
-            self.ctrl.estop_active = True
+        self.ctrl.scb_link_ok = True
+        self.ctrl.estop_active = True
 
-            reply_lines = await self.send_cmd("?")
-            status = ATDome.ShortStatus(reply_lines)
-            self.assertTrue(status.auto_shutdown_enabled)
-            self.assertEqual(status.move_code, 128)
-
-        asyncio.get_event_loop().run_until_complete(doit())
-
-    def test_long_status(self):
-        async def doit():
-            self.ctrl.rain_enabled = False
-
-            reply_lines = await self.send_cmd("+")
-            rem_status = ATDome.RemainingStatus(reply_lines)
-            self.assertFalse(rem_status.estop_active)
-            self.assertTrue(rem_status.scb_link_ok)
-            self.assertFalse(rem_status.rain_sensor_enabled)
-            self.assertTrue(rem_status.cloud_sensor_enabled)
-
-            self.ctrl.rain_enabled = True
-            self.ctrl.clouds_enabled = False
-
-            reply_lines = await self.send_cmd("+")
-            rem_status = ATDome.RemainingStatus(reply_lines)
-            self.assertFalse(rem_status.estop_active)
-            self.assertTrue(rem_status.scb_link_ok)
-            self.assertTrue(rem_status.rain_sensor_enabled)
-            self.assertFalse(rem_status.cloud_sensor_enabled)
-
-            self.ctrl.clouds_enabled = True
-            self.ctrl.scb_link_ok = False
-
-            reply_lines = await self.send_cmd("+")
-            rem_status = ATDome.RemainingStatus(reply_lines)
-            self.assertFalse(rem_status.estop_active)
-            self.assertFalse(rem_status.scb_link_ok)
-            self.assertTrue(rem_status.rain_sensor_enabled)
-            self.assertTrue(rem_status.cloud_sensor_enabled)
-
-            self.ctrl.scb_link_ok = True
-            self.ctrl.estop_active = True
-
-            reply_lines = await self.send_cmd("+")
-            rem_status = ATDome.RemainingStatus(reply_lines)
-            self.assertTrue(rem_status.estop_active)
-            self.assertTrue(rem_status.scb_link_ok)
-            self.assertTrue(rem_status.rain_sensor_enabled)
-            self.assertTrue(rem_status.cloud_sensor_enabled)
-
-        asyncio.get_event_loop().run_until_complete(doit())
+        reply_lines = await self.send_cmd("+")
+        rem_status = ATDome.RemainingStatus(reply_lines)
+        self.assertTrue(rem_status.estop_active)
+        self.assertTrue(rem_status.scb_link_ok)
+        self.assertTrue(rem_status.rain_sensor_enabled)
+        self.assertTrue(rem_status.cloud_sensor_enabled)
 
 
 if __name__ == "__main__":
