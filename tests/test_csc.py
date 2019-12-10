@@ -50,7 +50,7 @@ class Harness:
         self.csc = ATDome.ATDomeCsc(
             config_dir=config_dir,
             initial_state=initial_state,
-            initial_simulation_mode=1,
+            simulation_mode=1,
             mock_port=next(port_generator))
         self.remote = salobj.Remote(domain=self.csc.domain, name="ATDome", index=0)
 
