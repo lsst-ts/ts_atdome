@@ -63,8 +63,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         The initial state of the CSC. This is provided for unit testing,
         as real CSCs should start up in `lsst.ts.salobj.StateSTANDBY`,
         the default.
-    initial_simulation_mode : `int` (optional)
-        Initial simulation mode.
+    simulation_mode : `int` (optional)
+        Simulation mode.
     mock_port : `int` (optional)
         Port for mock controller TCP/IP interface. If `None` then use the
         port specified by the configuration. Only used in simulation mode.
@@ -72,7 +72,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     Raises
     ------
     salobj.ExpectedError
-        If initial_state or initial_simulation_mode is invalid.
+        If initial_state or simulation_mode is invalid.
 
     Notes
     -----
@@ -90,7 +90,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     * 3: could not start the mock controller
     """
     def __init__(self, config_dir=None, initial_state=salobj.State.STANDBY,
-                 initial_simulation_mode=0, mock_port=None):
+                 simulation_mode=0, mock_port=None):
         schema_path = pathlib.Path(__file__).resolve().parents[4].joinpath("schema", "ATDome.yaml")
 
         self.reader = None
@@ -121,7 +121,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.config = None
         self.mock_port = mock_port
         super().__init__("ATDome", index=0, schema_path=schema_path, config_dir=config_dir,
-                         initial_state=initial_state, initial_simulation_mode=initial_simulation_mode)
+                         initial_state=initial_state, simulation_mode=simulation_mode)
 
     async def do_moveAzimuth(self, data):
         """Implement the ``moveAzimuth`` command."""
@@ -687,4 +687,4 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     @classmethod
     def add_kwargs_from_args(cls, args, kwargs):
         super(ATDomeCsc, cls).add_kwargs_from_args(args, kwargs)
-        kwargs["initial_simulation_mode"] = 1 if args.simulate else 0
+        kwargs["simulation_mode"] = 1 if args.simulate else 0
