@@ -24,11 +24,11 @@ import asyncio
 import enum
 import functools
 import logging
-import time
 
 from astropy.coordinates import Angle
 import astropy.units as u
 
+from lsst.ts import simactuators
 from lsst.ts import salobj
 
 logging.basicConfig()
@@ -40,89 +40,10 @@ class Door(enum.Flag):
     Dropout = enum.auto()
 
 
-class Actuator:
-    """Model an actuator that moves between given limits at constant velocity.
-
-    Information is computed on request. This works because the system being
-    modeled can only be polled.
-    """
-    def __init__(self, min_pos, max_pos, pos, speed):
-        assert speed > 0
-        self.min_pos = min_pos
-        self.max_pos = max_pos
-        self._start_pos = pos
-        self._start_time = time.time()
-        self._end_pos = pos
-        self._end_time = time.time()
-        self.speed = speed
-
-    @property
-    def start_pos(self):
-        """Start position of move."""
-        return self._start_pos
-
-    @property
-    def end_pos(self):
-        """End position of move."""
-        return self._end_pos
-
-    def set_pos(self, pos):
-        """Set a new desired position."""
-        if pos < self.min_pos or pos > self.max_pos:
-            raise ValueError(f"pos={pos} not in range [{self.min_pos}, {self.max_pos}]")
-        self._start_pos = self.curr_pos
-        self._start_time = time.time()
-        self._end_pos = pos
-        dtime = self._move_duration()
-        self._end_time = self._start_time + dtime
-
-    def _move_duration(self):
-        return abs(self.end_pos - self.start_pos) / self.speed
-
-    @property
-    def curr_pos(self):
-        """Current position."""
-        curr_time = time.time()
-        if curr_time > self._end_time:
-            return self.end_pos
-        else:
-            dtime = curr_time - self._start_time
-            return self.start_pos + self.direction*self.speed*dtime
-
-    @property
-    def direction(self):
-        """1 if moving or moved to greater position, -1 otherwise."""
-        return 1 if self.end_pos >= self.start_pos else -1
-
-    @property
-    def moving(self):
-        """Is the axis moving?"""
-        return time.time() < self._end_time
-
-    def stop(self):
-        """Stop motion instantly.
-
-        Set start_pos and end_pos to the current position
-        and start_time and end_time to the current time.
-        """
-        curr_pos = self.curr_pos
-        curr_time = time.time()
-        self._start_pos = curr_pos
-        self._start_time = curr_time
-        self._end_pos = curr_pos
-        self._end_time = curr_time
-
-    @property
-    def remaining_time(self):
-        """Remaining time for this move (sec)."""
-        duration = self._end_time - time.time()
-        return max(duration, 0)
-
-
-class AzActuator(Actuator):
+class AzActuator(simactuators.PointToPointActuator):
     """Model the Dome azimuth actuator.
 
-    Unlike Actuator:
+    Unlike simactuators.PointToPointActuator:
 
     * Position uses astropy.coordinates.Angles.
     * Commanded position must be in the range [0, 360] deg.
@@ -130,21 +51,23 @@ class AzActuator(Actuator):
       For instance a move from 355 deg to 0 deg is a move of 5 deg
       (in the direction of increasing azimuth).
     """
-    def __init__(self, pos, speed):
-        super().__init__(min_pos=Angle(0, u.deg), max_pos=Angle(360, u.deg),
-                         pos=Angle(pos, u.deg), speed=Angle(speed, u.deg))
+    def __init__(self, start_position, speed):
+        super().__init__(min_position=Angle(0, u.deg), max_position=Angle(360, u.deg),
+                         start_position=Angle(start_position, u.deg), speed=Angle(speed, u.deg))
 
     @property
     def direction(self):
         """1 if moving or moved to greater azimuth, -1 otherwise."""
-        return 1 if salobj.angle_diff(self.end_pos, self.start_pos) > 0 else -1
+        return 1 if salobj.angle_diff(self.end_position, self.start_position) > 0 else -1
 
     def _move_duration(self):
-        return abs(salobj.angle_diff(self.end_pos, self.start_pos)) / self.speed
+        return abs(salobj.angle_diff(self.end_position, self.start_position)) / self.speed
 
     @property
-    def curr_pos(self):
-        return super().curr_pos.wrap_at(Angle(360, u.deg))
+    def current_position(self):
+        """Compute the total duration of a move, in seconds.
+        """
+        return super().current_position.wrap_at(Angle(360, u.deg))
 
 
 class MockDomeController:
@@ -192,9 +115,12 @@ class MockDomeController:
         self.home_az = Angle(10, u.deg)
         self.home_az_overshoot = Angle(home_az_overshoot, u.deg)
         self.home_az_vel = Angle(home_az_vel, u.deg)
-        self.az_actuator = AzActuator(pos=0, speed=az_vel)
-        self.door_actuators = dict((enum, Actuator(min_pos=0, max_pos=100, pos=0,
-                                                   speed=100/door_time)) for enum in Door)
+        self.az_actuator = AzActuator(start_position=0, speed=az_vel)
+        self.door_actuators = dict((enum, simactuators.PointToPointActuator(min_position=0,
+                                                                            max_position=100,
+                                                                            start_position=0,
+                                                                            speed=100/door_time))
+                                   for enum in Door)
 
         self._homing_task = None
         self._homing = False
@@ -307,7 +233,7 @@ class MockDomeController:
         """
         self.log.debug(f"do_close_doors({doors})")
         for door in self.door_iter(doors):
-            self.door_actuators[door].set_pos(0)
+            self.door_actuators[door].set_position(0)
 
     def do_open_doors(self, doors):
         """Open the specified doors.
@@ -319,7 +245,7 @@ class MockDomeController:
         """
         self.log.debug(f"do_open_doors({doors})")
         for door in self.door_iter(doors):
-            self.door_actuators[door].set_pos(100)
+            self.door_actuators[door].set_position(100)
 
     def door_iter(self, doors):
         """Convert a doors bitmask to a list of Doors"""
@@ -352,18 +278,18 @@ class MockDomeController:
         outputs = []
         for door, name, closing_code in ((Door.Main, "MAIN", 4), (Door.Dropout, "DROP", 16)):
             actuator = self.door_actuators[door]
-            curr_pos = actuator.curr_pos
+            current_position = actuator.current_position
             if actuator.moving:
                 if actuator.direction < 0:
                     move_code += closing_code
                 else:
                     move_code += 2*closing_code
             state_str = "AJAR"
-            if curr_pos == 0:
+            if current_position == 0:
                 state_str = "CLOSED"
-            elif curr_pos == 100:
+            elif current_position == 100:
                 state_str = "OPEN"
-            outputs.append(f"{name} {state_str} {curr_pos:03.0f}")
+            outputs.append(f"{name} {state_str} {current_position:03.0f}")
         enabled_str = "ON" if self.auto_shutdown_enabled else "OFF"
         sensor_mask = 0
         if self.rain_detected:
@@ -373,7 +299,7 @@ class MockDomeController:
         outputs.append(f"[{enabled_str}] {sensor_mask:02d}")
 
         az_moving = self.az_actuator.moving
-        curr_az = self.az_actuator.curr_pos
+        curr_az = self.az_actuator.current_position
         outputs.append(f"POSN {curr_az.deg:0.2f}")
         if self.last_rot_right is None:
             dir_code = "--"
@@ -405,7 +331,7 @@ class MockDomeController:
         outputs.append("Tolerance (degrees): 1.00")
         outputs.append("Encoder Counts per 360: 490496")
         outputs.append("Encoder Counts:   1485289")
-        outputs.append(f"Last Azimuth GoTo:   {self.az_actuator.end_pos:05.2f}")
+        outputs.append(f"Last Azimuth GoTo:   {self.az_actuator.end_position:05.2f}")
         outputs.append("Azimuth Move Timeout (secs): 120")
         outputs.append(f"Rain-Snow enabled:  {1 if self.rain_enabled else 0}")
         outputs.append(f"Cloud Sensor enabled: {1 if self.clouds_enabled else 0}")
@@ -433,7 +359,7 @@ class MockDomeController:
         cmd_az : `astropy.coordinates.Angle`
             Desired azimuth. Must be in the range [0, 360] deg.
         """
-        self.az_actuator.set_pos(cmd_az)
+        self.az_actuator.set_position(cmd_az)
         self.last_rot_right = True if self.az_actuator.direction == 1 else False
 
     async def implement_home(self):
