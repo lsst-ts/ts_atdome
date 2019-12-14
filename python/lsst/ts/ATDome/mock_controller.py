@@ -136,6 +136,10 @@ class MockDomeController:
         self.log = logging.getLogger("MockDomeController")
         self._server = None
 
+        # Dict of command: (has_argument, function).
+        # The function is called with:
+        # * No arguments, if `has_argument` False.
+        # * The argument as a string, if `has_argument` is True.
         self.dispatch_dict = {
             "?": (False, self.do_short_status),
             "+": (False, self.do_full_status),
@@ -149,13 +153,6 @@ class MockDomeController:
             "HM": (False, self.do_home),
             "MV": (True, self.do_set_cmd_az),
         }
-        """Dict of command: (has_argument, function)
-
-        The function is called with:
-
-        * No arguments, if `has_argument` False.
-        * The argument as a string, if `has_argument` is True.
-        """
 
     async def start(self):
         """Start the TCP/IP server.
