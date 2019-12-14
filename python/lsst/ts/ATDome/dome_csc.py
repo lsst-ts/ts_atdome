@@ -626,13 +626,12 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             self.fault(code=3, report=f"{err_msg}: {e}")
             raise
 
-    def report_summary_state(self):
-        super().report_summary_state()
+    async def handle_summary_state(self):
         if self.disabled_or_enabled:
             if not self.connected and self.connect_task.done():
-                self.connect_task = asyncio.ensure_future(self.connect())
+                await self.connect()
         else:
-            asyncio.ensure_future(self.disconnect())
+            await self.disconnect()
 
     async def start(self):
         await super().start()
