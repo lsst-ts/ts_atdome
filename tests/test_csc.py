@@ -148,7 +148,7 @@ class CscTestCase(asynctest.TestCase):
             self.assertFalse(az_state.homing)
 
             # set home azimuth near current position so homing goes quickly
-            curr_az = harness.csc.mock_ctrl.az_actuator.curr_pos
+            curr_az = harness.csc.mock_ctrl.az_actuator.current_position
             home_azimuth = (curr_az - 2*u.deg).wrap_at(Angle(360, u.deg))
             harness.csc.mock_ctrl.home_az = home_azimuth
 

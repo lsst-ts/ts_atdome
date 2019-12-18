@@ -6,6 +6,31 @@
 ts_ATDome Revision History
 ##########################
 
+v0.10.0
+=======
+
+Update to use ts_simactuators.
+
+Requirements
+============
+
+* ts_salobj 5.2
+* ts_simactuators 0.1
+* ts_idl
+* IDL file for ATDome from ts_xml 4.1
+
+v0.9.0
+======
+
+Update for ts_salobj 5.2: rename initial_simulation_mode to simulation_mode.
+
+Requirements
+============
+
+* ts_salobj 5.2
+* ts_idl
+* IDL file for ATDome from ts_xml 4.1
+
 v0.8.0
 ======
 
