@@ -123,7 +123,7 @@ class MockTestCase(asynctest.TestCase):
     async def test_home_az(self):
         daz = -2
         est_ccw_duration = abs(daz / self.ctrl.az_vel.deg)
-        curr_az = self.ctrl.az_actuator.curr_pos
+        curr_az = self.ctrl.az_actuator.current_position
         home_azimuth = (curr_az - 2*u.deg).wrap_at(Angle(360, u.deg))
         self.ctrl.home_az = home_azimuth
 
@@ -150,7 +150,7 @@ class MockTestCase(asynctest.TestCase):
         status = ATDome.ShortStatus(reply_lines)
         self.assertEqual(status.move_code, 0)
         self.assertAlmostEqual(self.ctrl.az_actuator.speed.deg, self.ctrl.az_vel.deg)
-        self.assertAlmostEqual(self.ctrl.az_actuator.curr_pos.deg, self.ctrl.home_az.deg)
+        self.assertAlmostEqual(self.ctrl.az_actuator.current_position.deg, self.ctrl.home_az.deg)
 
     async def test_main_door(self):
         est_duration = self.ctrl.door_time
