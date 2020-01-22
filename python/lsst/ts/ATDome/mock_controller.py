@@ -398,7 +398,7 @@ class MockDomeController:
         """Create full status as a list of strings."""
         outputs = self.do_short_status()
         outputs.append(f"Emergency Stop Active: {1 if self.estop_active else 0}")
-        outputs.append(f"SCB radio link OK:    {1 if self.scb_link_ok else 0}")
+        outputs.append(f"Top Comm Link OK:    {1 if self.scb_link_ok else 0}")
         outputs.append(f"Home Azimuth: {self.home_az.deg:05.2f}")
         outputs.append(f"High Speed (degrees): {self.az_vel:05.2f}")
         outputs.append("Coast (degrees): 0.20")
