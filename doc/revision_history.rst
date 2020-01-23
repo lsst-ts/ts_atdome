@@ -6,6 +6,19 @@
 ts_ATDome Revision History
 ##########################
 
+v1.0.0
+======
+
+Update for a change to the low-level controller (a minor change to full status output).
+
+Requirements
+============
+
+* ts_salobj 5.2
+* ts_simactuators 0.1
+* ts_idl
+* IDL file for ATDome from ts_xml 4.1
+
 v0.10.0
 =======
 
