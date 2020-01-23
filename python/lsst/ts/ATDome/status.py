@@ -93,7 +93,7 @@ class RemainingStatus:
         estop_active_match = parse(r"Emergency Stop Active: +(\d)", lines[5])
         self.estop_active = bool(int(estop_active_match.group(1)))
 
-        scb_link_ok_match = parse(r"SCB radio link OK: +(\d)", lines[6])
+        scb_link_ok_match = parse(r"Top Comm Link OK: +(\d)", lines[6])
         self.scb_link_ok = bool(int(scb_link_ok_match.group(1)))
 
         rain_sensor_match = parse(r"Rain-Snow enabled: +(\d)", lines[15])
