@@ -57,6 +57,7 @@ def parse(regex, line):
 class ShortStatus:
     """Short status from the TCP/IP AT Dome controller.
     """
+
     def __init__(self, lines):
         if len(lines) != 5:
             raise RuntimeError(f"Got {len(lines)} lines; need 5")
@@ -86,6 +87,7 @@ class RemainingStatus:
 
     Breaking full status into two object simplifies CSC code.
     """
+
     def __init__(self, lines):
         if len(lines) != 25:
             raise RuntimeError(f"Got {len(lines)} lines; need 25")

@@ -36,6 +36,7 @@ logging.basicConfig()
 
 class Door(enum.Flag):
     """Shutter door identifiers."""
+
     Main = enum.auto()
     Dropout = enum.auto()
 
@@ -51,17 +52,26 @@ class AzActuator(simactuators.PointToPointActuator):
       For instance a move from 355 deg to 0 deg is a move of 5 deg
       (in the direction of increasing azimuth).
     """
+
     def __init__(self, start_position, speed):
-        super().__init__(min_position=Angle(0, u.deg), max_position=Angle(360, u.deg),
-                         start_position=Angle(start_position, u.deg), speed=Angle(speed, u.deg))
+        super().__init__(
+            min_position=Angle(0, u.deg),
+            max_position=Angle(360, u.deg),
+            start_position=Angle(start_position, u.deg),
+            speed=Angle(speed, u.deg),
+        )
 
     @property
     def direction(self):
         """1 if moving or moved to greater azimuth, -1 otherwise."""
-        return 1 if salobj.angle_diff(self.end_position, self.start_position) > 0 else -1
+        return (
+            1 if salobj.angle_diff(self.end_position, self.start_position) > 0 else -1
+        )
 
     def _move_duration(self):
-        return abs(salobj.angle_diff(self.end_position, self.start_position)) / self.speed
+        return (
+            abs(salobj.angle_diff(self.end_position, self.start_position)) / self.speed
+        )
 
     @property
     def current_position(self):
@@ -108,7 +118,16 @@ class MockDomeController:
     * Encoder counts are not supported; reported values are bogus.
     * Door sequencing is not supported; doors move as if independent.
     """
-    def __init__(self, port, door_time=1, az_vel=6, home_az=10, home_az_overshoot=1, home_az_vel=1):
+
+    def __init__(
+        self,
+        port,
+        door_time=1,
+        az_vel=6,
+        home_az=10,
+        home_az_overshoot=1,
+        home_az_vel=1,
+    ):
         self.port = port
         self.door_time = door_time
         self.az_vel = Angle(az_vel, u.deg)
@@ -116,11 +135,18 @@ class MockDomeController:
         self.home_az_overshoot = Angle(home_az_overshoot, u.deg)
         self.home_az_vel = Angle(home_az_vel, u.deg)
         self.az_actuator = AzActuator(start_position=0, speed=az_vel)
-        self.door_actuators = dict((enum, simactuators.PointToPointActuator(min_position=0,
-                                                                            max_position=100,
-                                                                            start_position=0,
-                                                                            speed=100/door_time))
-                                   for enum in Door)
+        self.door_actuators = dict(
+            (
+                enum,
+                simactuators.PointToPointActuator(
+                    min_position=0,
+                    max_position=100,
+                    start_position=0,
+                    speed=100 / door_time,
+                ),
+            )
+            for enum in Door
+        )
 
         self._homing_task = None
         self._homing = False
@@ -148,8 +174,14 @@ class MockDomeController:
             "OP": (False, functools.partial(self.do_open_doors, Door.Main)),
             "UP": (False, functools.partial(self.do_close_doors, Door.Dropout)),
             "DN": (False, functools.partial(self.do_open_doors, Door.Dropout)),
-            "SC": (False, functools.partial(self.do_close_doors, Door.Main | Door.Dropout)),
-            "SO": (False, functools.partial(self.do_open_doors, Door.Main | Door.Dropout)),
+            "SC": (
+                False,
+                functools.partial(self.do_close_doors, Door.Main | Door.Dropout),
+            ),
+            "SO": (
+                False,
+                functools.partial(self.do_open_doors, Door.Main | Door.Dropout),
+            ),
             "HM": (False, self.do_home),
             "MV": (True, self.do_set_cmd_az),
         }
@@ -159,7 +191,9 @@ class MockDomeController:
 
         Set start_task done and start the command loop.
         """
-        self._server = await asyncio.start_server(self.cmd_loop, host="127.0.0.1", port=self.port)
+        self._server = await asyncio.start_server(
+            self.cmd_loop, host="127.0.0.1", port=self.port
+        )
 
     async def stop(self, timeout=5):
         """Stop the TCP/IP server.
@@ -207,7 +241,9 @@ class MockDomeController:
                     has_data, func = self.dispatch_dict[cmd]
                     desired_len = 2 if has_data else 1
                     if len(items) != desired_len:
-                        raise RuntimeError(f"{line} split into {len(items)} pieces; expected {desired_len}")
+                        raise RuntimeError(
+                            f"{line} split into {len(items)} pieces; expected {desired_len}"
+                        )
                     if has_data:
                         outputs = func(items[0])
                     else:
@@ -273,14 +309,17 @@ class MockDomeController:
         """Create short status as a list of strings."""
         move_code = 0
         outputs = []
-        for door, name, closing_code in ((Door.Main, "MAIN", 4), (Door.Dropout, "DROP", 16)):
+        for door, name, closing_code in (
+            (Door.Main, "MAIN", 4),
+            (Door.Dropout, "DROP", 16),
+        ):
             actuator = self.door_actuators[door]
             current_position = actuator.current_position
             if actuator.moving:
                 if actuator.direction < 0:
                     move_code += closing_code
                 else:
-                    move_code += 2*closing_code
+                    move_code += 2 * closing_code
             state_str = "AJAR"
             if current_position == 0:
                 state_str = "CLOSED"

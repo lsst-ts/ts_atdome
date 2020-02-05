@@ -29,8 +29,12 @@ from astropy.coordinates import Angle
 import astropy.units as u
 
 from lsst.ts import salobj
-from lsst.ts.idl.enums.ATDome import AzimuthCommandedState, AzimuthState, \
-    ShutterDoorCommandedState, ShutterDoorState
+from lsst.ts.idl.enums.ATDome import (
+    AzimuthCommandedState,
+    AzimuthState,
+    ShutterDoorCommandedState,
+    ShutterDoorState,
+)
 from .mock_controller import MockDomeController
 from .status import ShortStatus, RemainingStatus
 
@@ -89,9 +93,20 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     * 2: read from TCP/IP ATDome controller timed out
     * 3: could not start the mock controller
     """
-    def __init__(self, config_dir=None, initial_state=salobj.State.STANDBY,
-                 simulation_mode=0, mock_port=None):
-        schema_path = pathlib.Path(__file__).resolve().parents[4].joinpath("schema", "ATDome.yaml")
+
+    def __init__(
+        self,
+        config_dir=None,
+        initial_state=salobj.State.STANDBY,
+        simulation_mode=0,
+        mock_port=None,
+    ):
+        schema_path = (
+            pathlib.Path(__file__)
+            .resolve()
+            .parents[4]
+            .joinpath("schema", "ATDome.yaml")
+        )
 
         self.reader = None
         self.writer = None
@@ -120,8 +135,14 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.cmd_lock = asyncio.Lock()
         self.config = None
         self.mock_port = mock_port
-        super().__init__("ATDome", index=0, schema_path=schema_path, config_dir=config_dir,
-                         initial_state=initial_state, simulation_mode=simulation_mode)
+        super().__init__(
+            "ATDome",
+            index=0,
+            schema_path=schema_path,
+            config_dir=config_dir,
+            initial_state=initial_state,
+            simulation_mode=simulation_mode,
+        )
 
     async def do_moveAzimuth(self, data):
         """Implement the ``moveAzimuth`` command."""
@@ -130,10 +151,15 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             raise salobj.ExpectedError("Cannot move azimuth while homing")
         azimuth = data.azimuth
         if azimuth < 0 or azimuth > 360:
-            raise salobj.ExpectedError(f"azimuth={azimuth} deg; must be in range [0, 360]")
+            raise salobj.ExpectedError(
+                f"azimuth={azimuth} deg; must be in range [0, 360]"
+            )
         await self.run_command(f"{azimuth:0.3f} MV")
-        self.evt_azimuthCommandedState.set_put(commandedState=AzimuthCommandedState.GOTOPOSITION,
-                                               azimuth=azimuth, force_output=True)
+        self.evt_azimuthCommandedState.set_put(
+            commandedState=AzimuthCommandedState.GOTOPOSITION,
+            azimuth=azimuth,
+            force_output=True,
+        )
         self.status_sleep_task.cancel()
 
     async def do_closeShutter(self, data):
@@ -141,33 +167,42 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.assert_enabled("closeShutter")
         self.shutter_task.cancel()
         await self.run_command("SC")
-        self.evt_dropoutDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.CLOSED,
-                                                   force_output=True)
-        self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.CLOSED,
-                                                force_output=True)
-        await self.wait_for_shutter(dropout_state=ShutterDoorState.CLOSED,
-                                    main_state=ShutterDoorState.CLOSED)
+        self.evt_dropoutDoorCommandedState.set_put(
+            commandedState=ShutterDoorCommandedState.CLOSED, force_output=True
+        )
+        self.evt_mainDoorCommandedState.set_put(
+            commandedState=ShutterDoorCommandedState.CLOSED, force_output=True
+        )
+        await self.wait_for_shutter(
+            dropout_state=ShutterDoorState.CLOSED, main_state=ShutterDoorState.CLOSED
+        )
 
     async def do_openShutter(self, data):
         """Implement the ``openShutter`` command."""
         self.assert_enabled("openShutter")
         await self.run_command("SO")
-        self.evt_dropoutDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.OPENED,
-                                                   force_output=True)
-        self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.OPENED,
-                                                force_output=True)
-        await self.wait_for_shutter(dropout_state=ShutterDoorState.OPENED,
-                                    main_state=ShutterDoorState.OPENED)
+        self.evt_dropoutDoorCommandedState.set_put(
+            commandedState=ShutterDoorCommandedState.OPENED, force_output=True
+        )
+        self.evt_mainDoorCommandedState.set_put(
+            commandedState=ShutterDoorCommandedState.OPENED, force_output=True
+        )
+        await self.wait_for_shutter(
+            dropout_state=ShutterDoorState.OPENED, main_state=ShutterDoorState.OPENED
+        )
 
     async def do_stopMotion(self, data):
         """Implement the ``stopMotion`` command."""
         self.assert_enabled("stopMotion")
-        self.evt_azimuthCommandedState.set_put(commandedState=AzimuthCommandedState.STOP,
-                                               force_output=True)
-        self.evt_dropoutDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.STOP,
-                                                   force_output=True)
-        self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.STOP,
-                                                force_output=True)
+        self.evt_azimuthCommandedState.set_put(
+            commandedState=AzimuthCommandedState.STOP, force_output=True
+        )
+        self.evt_dropoutDoorCommandedState.set_put(
+            commandedState=ShutterDoorCommandedState.STOP, force_output=True
+        )
+        self.evt_mainDoorCommandedState.set_put(
+            commandedState=ShutterDoorCommandedState.STOP, force_output=True
+        )
         await self.run_command("ST")
         self.shutter_task.cancel()
         self.status_sleep_task.cancel()
@@ -177,8 +212,11 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.assert_enabled("homeAzimuth")
         if self.evt_azimuthState.data.homing:
             raise salobj.ExpectedError("Already homing")
-        self.evt_azimuthCommandedState.set_put(commandedState=AzimuthCommandedState.HOME,
-                                               azimuth=math.nan, force_output=True)
+        self.evt_azimuthCommandedState.set_put(
+            commandedState=AzimuthCommandedState.HOME,
+            azimuth=math.nan,
+            force_output=True,
+        )
         await self.run_command("HM")
         self.status_sleep_task.cancel()
 
@@ -186,40 +224,55 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         """Implement the ``moveShutterDropoutDoor`` command."""
         self.assert_enabled("moveShutterDropoutDoor")
         if self.evt_mainDoorState.data.state != ShutterDoorState.OPENED:
-            raise salobj.ExpectedError("Cannot move the dropout door until the main door is fully open.")
+            raise salobj.ExpectedError(
+                "Cannot move the dropout door until the main door is fully open."
+            )
         if data.open:
-            self.evt_dropoutDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.OPENED,
-                                                       force_output=True)
+            self.evt_dropoutDoorCommandedState.set_put(
+                commandedState=ShutterDoorCommandedState.OPENED, force_output=True
+            )
             await self.run_command("DN")
         else:
-            self.evt_dropoutDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.CLOSED,
-                                                       force_output=True)
+            self.evt_dropoutDoorCommandedState.set_put(
+                commandedState=ShutterDoorCommandedState.CLOSED, force_output=True
+            )
             await self.run_command("UP")
 
         await self.wait_for_shutter(
-            dropout_state=ShutterDoorState.OPENED if data.open else ShutterDoorState.CLOSED,
-            main_state=None)
+            dropout_state=ShutterDoorState.OPENED
+            if data.open
+            else ShutterDoorState.CLOSED,
+            main_state=None,
+        )
 
     async def do_moveShutterMainDoor(self, data):
         """Implement the ``moveShutterMainDoor`` command."""
         self.assert_enabled("moveShutterMainDoor")
         if data.open:
-            self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.OPENED,
-                                                    force_output=True)
+            self.evt_mainDoorCommandedState.set_put(
+                commandedState=ShutterDoorCommandedState.OPENED, force_output=True
+            )
             await self.run_command("OP")
         else:
             if self.evt_dropoutDoorState.data.state not in (
-                    ShutterDoorState.CLOSED,
-                    ShutterDoorState.OPENED):
-                raise salobj.ExpectedError("Cannot close the main door "
-                                           "until the dropout door is fully closed or fully open.")
-            self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.CLOSED,
-                                                    force_output=True)
+                ShutterDoorState.CLOSED,
+                ShutterDoorState.OPENED,
+            ):
+                raise salobj.ExpectedError(
+                    "Cannot close the main door "
+                    "until the dropout door is fully closed or fully open."
+                )
+            self.evt_mainDoorCommandedState.set_put(
+                commandedState=ShutterDoorCommandedState.CLOSED, force_output=True
+            )
             await self.run_command("CL")
 
         await self.wait_for_shutter(
             dropout_state=None,
-            main_state=ShutterDoorState.OPENED if data.open else ShutterDoorState.CLOSED)
+            main_state=ShutterDoorState.OPENED
+            if data.open
+            else ShutterDoorState.CLOSED,
+        )
 
     async def run_command(self, cmd):
         """Send a command to the TCP/IP controller and process its replies.
@@ -237,14 +290,13 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         async with self.cmd_lock:
             self.writer.write(f"{cmd}\r\n".encode())
             await self.writer.drain()
-            expected_lines = {  # excluding final ">" line
-                "?": 5,
-                "+": 25,
-            }.get(cmd, 0)
+            expected_lines = {"?": 5, "+": 25}.get(cmd, 0)  # excluding final ">" line
 
             try:
-                read_bytes = await asyncio.wait_for(self.reader.readuntil(">".encode()),
-                                                    timeout=self.config.read_timeout)
+                read_bytes = await asyncio.wait_for(
+                    self.reader.readuntil(">".encode()),
+                    timeout=self.config.read_timeout,
+                )
             except Exception as e:
                 if isinstance(e, asyncio.streams.IncompleteReadError):
                     err_msg = "TCP/IP controller exited"
@@ -259,7 +311,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             lines = data.split("\n")[:-1]  # strip final > line
             lines = [elt.strip() for elt in lines]
             if len(lines) != expected_lines:
-                self.log.warning(f"Command {cmd} returned {data}; expected {expected_lines} lines")
+                self.log.warning(
+                    f"Command {cmd} returned {data}; expected {expected_lines} lines"
+                )
                 return
             if cmd == "?":
                 if self.handle_short_status(lines):
@@ -284,37 +338,66 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         """
         mask = Axis(0)
         az_halted = move_code & (MoveCode.AZPOSITIVE | MoveCode.AZNEGATIVE) == 0
-        if az_halted and \
-                self.evt_azimuthCommandedState.data.commandedState == AzimuthCommandedState.GOTOPOSITION:
-            daz = salobj.angle_diff(self.tel_position.data.azimuthPosition,
-                                    self.evt_azimuthCommandedState.data.azimuth)
+        if (
+            az_halted
+            and self.evt_azimuthCommandedState.data.commandedState
+            == AzimuthCommandedState.GOTOPOSITION
+        ):
+            daz = salobj.angle_diff(
+                self.tel_position.data.azimuthPosition,
+                self.evt_azimuthCommandedState.data.azimuth,
+            )
             if abs(daz) < self.az_tolerance:
                 mask |= Axis.AZ
 
-        dropout_halted = move_code & (MoveCode.DROPOUTDOORCLOSING | MoveCode.DROPOUTDOOROPENING) == 0
+        dropout_halted = (
+            move_code & (MoveCode.DROPOUTDOORCLOSING | MoveCode.DROPOUTDOOROPENING) == 0
+        )
         if dropout_halted:
-            if self.evt_dropoutDoorCommandedState.data.commandedState == ShutterDoorCommandedState.OPENED:
+            if (
+                self.evt_dropoutDoorCommandedState.data.commandedState
+                == ShutterDoorCommandedState.OPENED
+            ):
                 if self.tel_position.data.dropoutDoorOpeningPercentage == 100:
                     mask |= Axis.DROPOUTDOOR
-            elif self.evt_dropoutDoorCommandedState.data.commandedState == ShutterDoorCommandedState.CLOSED:
+            elif (
+                self.evt_dropoutDoorCommandedState.data.commandedState
+                == ShutterDoorCommandedState.CLOSED
+            ):
                 if self.tel_position.data.dropoutDoorOpeningPercentage == 0:
                     mask |= Axis.DROPOUTDOOR
 
-        dropout_halted = move_code & (MoveCode.DROPOUTDOORCLOSING | MoveCode.DROPOUTDOOROPENING) == 0
+        dropout_halted = (
+            move_code & (MoveCode.DROPOUTDOORCLOSING | MoveCode.DROPOUTDOOROPENING) == 0
+        )
         if dropout_halted:
-            if self.evt_dropoutDoorCommandedState.data.commandedState == ShutterDoorCommandedState.OPENED:
+            if (
+                self.evt_dropoutDoorCommandedState.data.commandedState
+                == ShutterDoorCommandedState.OPENED
+            ):
                 if self.tel_position.data.dropoutDoorOpeningPercentage == 100:
                     mask |= Axis.DROPOUTDOOR
-            elif self.evt_dropoutDoorCommandedState.data.commandedState == ShutterDoorCommandedState.CLOSED:
+            elif (
+                self.evt_dropoutDoorCommandedState.data.commandedState
+                == ShutterDoorCommandedState.CLOSED
+            ):
                 if self.tel_position.data.dropoutDoorOpeningPercentage == 0:
                     mask |= Axis.DROPOUTDOOR
 
-        main_halted = move_code & (MoveCode.MAINDOORCLOSING | MoveCode.MAINDOOROPENING) == 0
+        main_halted = (
+            move_code & (MoveCode.MAINDOORCLOSING | MoveCode.MAINDOOROPENING) == 0
+        )
         if main_halted:
-            if self.evt_mainDoorCommandedState.data.commandedState == ShutterDoorCommandedState.OPENED:
+            if (
+                self.evt_mainDoorCommandedState.data.commandedState
+                == ShutterDoorCommandedState.OPENED
+            ):
                 if self.tel_position.data.mainDoorOpeningPercentage == 100:
                     mask |= Axis.MAINDOOR
-            elif self.evt_mainDoorCommandedState.data.commandedState == ShutterDoorCommandedState.CLOSED:
+            elif (
+                self.evt_mainDoorCommandedState.data.commandedState
+                == ShutterDoorCommandedState.CLOSED
+            ):
                 if self.tel_position.data.mainDoorOpeningPercentage == 0:
                     mask |= Axis.MAINDOOR
 
@@ -353,8 +436,12 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         move_code : `int`
             Motion code: the integer from line 5 of short status.
         """
-        closing_code = MoveCode.MAINDOORCLOSING if is_main else MoveCode.DROPOUTDOORCLOSING
-        opening_code = MoveCode.MAINDOOROPENING if is_main else MoveCode.DROPOUTDOOROPENING
+        closing_code = (
+            MoveCode.MAINDOORCLOSING if is_main else MoveCode.DROPOUTDOORCLOSING
+        )
+        opening_code = (
+            MoveCode.MAINDOOROPENING if is_main else MoveCode.DROPOUTDOOROPENING
+        )
         door_mask = closing_code | opening_code
         door_state = None
         if move_code & door_mask == 0:
@@ -369,7 +456,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         elif move_code & opening_code:
             door_state = ShutterDoorState.OPENING
         if door_state is None:
-            raise RuntimeError(f"Could not parse main door state from move_code={move_code}")
+            raise RuntimeError(
+                f"Could not parse main door state from move_code={move_code}"
+            )
         return door_state
 
     @staticmethod
@@ -406,18 +495,26 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             async with self.cmd_lock:
                 if self.simulation_mode != 0:
                     if self.mock_ctrl is None:
-                        raise RuntimeError("In simulation mode but no mock controller found.")
+                        raise RuntimeError(
+                            "In simulation mode but no mock controller found."
+                        )
                     port = self.mock_ctrl.port
                 else:
                     port = self.config.port
                 connect_coro = asyncio.open_connection(host=host, port=port)
-                self.reader, self.writer = await asyncio.wait_for(connect_coro,
-                                                                  timeout=self.config.connection_timeout)
+                self.reader, self.writer = await asyncio.wait_for(
+                    connect_coro, timeout=self.config.connection_timeout
+                )
                 # drop welcome message
-                await asyncio.wait_for(self.reader.readuntil(">".encode()), timeout=self.config.read_timeout)
+                await asyncio.wait_for(
+                    self.reader.readuntil(">".encode()),
+                    timeout=self.config.read_timeout,
+                )
             self.log.debug("connected")
         except Exception as e:
-            err_msg = f"Could not open connection to host={host}, port={self.config.port}"
+            err_msg = (
+                f"Could not open connection to host={host}, port={self.config.port}"
+            )
             self.log.exception(err_msg)
             self.fault(code=1, report=f"{err_msg}: {e}")
             return
@@ -448,14 +545,17 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
         # halt all motion (we just want to stop azimuth,
         # but there is no way to do that)
-        self.evt_azimuthCommandedState.set_put(commandedState=AzimuthCommandedState.STOP,
-                                               force_output=True)
+        self.evt_azimuthCommandedState.set_put(
+            commandedState=AzimuthCommandedState.STOP, force_output=True
+        )
         await self.run_command("ST")
         # close the shutter
-        self.evt_dropoutDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.CLOSED,
-                                                   force_output=True)
-        self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.CLOSED,
-                                                force_output=True)
+        self.evt_dropoutDoorCommandedState.set_put(
+            commandedState=ShutterDoorCommandedState.CLOSED, force_output=True
+        )
+        self.evt_mainDoorCommandedState.set_put(
+            commandedState=ShutterDoorCommandedState.CLOSED, force_output=True
+        )
         await self.run_command("SC")
         self.status_sleep_task.cancel()
 
@@ -476,7 +576,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 writer.close()
         self.status_sleep_task.cancel()
         if not self.status_task.done():
-            await asyncio.wait_for(self.status_task, timeout=self.config.read_timeout*2)
+            await asyncio.wait_for(
+                self.status_task, timeout=self.config.read_timeout * 2
+            )
         await self.stop_mock_ctrl()
 
     def handle_short_status(self, lines):
@@ -498,23 +600,27 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.tel_position.data.mainDoorOpeningPercentage = status.main_door_pct
         self.tel_position.data.dropoutDoorOpeningPercentage = status.dropout_door_pct
         settings_updated = self.evt_settingsAppliedDomeController.set(
-            autoShutdownEnabled=status.auto_shutdown_enabled)
+            autoShutdownEnabled=status.auto_shutdown_enabled
+        )
 
         self.tel_position.set_put(azimuthPosition=status.az_pos.deg)
 
         move_code = status.move_code
         self.evt_azimuthState.set_put(
             state=self.compute_az_state(move_code),
-            homing=bool(move_code & MoveCode.HOMING))
+            homing=bool(move_code & MoveCode.HOMING),
+        )
 
         dropout_door_state = self.compute_door_state(
             open_pct=self.tel_position.data.dropoutDoorOpeningPercentage,
             is_main=False,
-            move_code=move_code)
+            move_code=move_code,
+        )
         main_door_state = self.compute_door_state(
             open_pct=self.tel_position.data.mainDoorOpeningPercentage,
             is_main=True,
-            move_code=move_code)
+            move_code=move_code,
+        )
         self.evt_dropoutDoorState.set_put(state=dropout_door_state)
         self.evt_mainDoorState.set_put(state=main_door_state)
 
@@ -529,7 +635,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         shutter_in_position = in_position(Axis.DROPOUTDOOR | Axis.MAINDOOR)
         self.evt_azimuthInPosition.set_put(inPosition=azimuth_in_position)
         self.evt_shutterInPosition.set_put(inPosition=shutter_in_position)
-        self.evt_allAxesInPosition.set_put(inPosition=azimuth_in_position and shutter_in_position)
+        self.evt_allAxesInPosition.set_put(
+            inPosition=azimuth_in_position and shutter_in_position
+        )
 
         if not self.shutter_task.done():
             end_shutter_task = True
@@ -563,9 +671,13 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         """
         allowed_values = (ShutterDoorState.OPENED, ShutterDoorState.CLOSED, None)
         if dropout_state not in allowed_values:
-            raise ValueError(f"dropout_state={dropout_state!r}; must be one of {allowed_values}")
+            raise ValueError(
+                f"dropout_state={dropout_state!r}; must be one of {allowed_values}"
+            )
         if main_state not in allowed_values:
-            raise ValueError(f"main_state={main_state!r}; must be one of {allowed_values}")
+            raise ValueError(
+                f"main_state={main_state!r}; must be one of {allowed_values}"
+            )
         if dropout_state is None and main_state is None:
             raise ValueError(f"dropout_state and main_state cannot both be None")
         self.shutter_task.cancel()
@@ -605,7 +717,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     async def implement_simulation_mode(self, simulation_mode):
         if simulation_mode not in (0, 1):
             raise salobj.ExpectedError(
-                f"Simulation_mode={simulation_mode} must be 0 or 1")
+                f"Simulation_mode={simulation_mode} must be 0 or 1"
+            )
 
     async def start_mock_ctrl(self):
         """Start the mock controller.
@@ -635,12 +748,17 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
     async def start(self):
         await super().start()
-        self.evt_azimuthCommandedState.set_put(commandedState=AzimuthCommandedState.UNKNOWN,
-                                               azimuth=math.nan, force_output=True)
-        self.evt_dropoutDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.UNKNOWN,
-                                                   force_output=True)
-        self.evt_mainDoorCommandedState.set_put(commandedState=ShutterDoorCommandedState.UNKNOWN,
-                                                force_output=True)
+        self.evt_azimuthCommandedState.set_put(
+            commandedState=AzimuthCommandedState.UNKNOWN,
+            azimuth=math.nan,
+            force_output=True,
+        )
+        self.evt_dropoutDoorCommandedState.set_put(
+            commandedState=ShutterDoorCommandedState.UNKNOWN, force_output=True
+        )
+        self.evt_mainDoorCommandedState.set_put(
+            commandedState=ShutterDoorCommandedState.UNKNOWN, force_output=True
+        )
 
     async def status_loop(self):
         """Read and report status from the TCP/IP controller.
@@ -657,7 +775,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             except Exception as e:
                 self.log.warning(f"Status request failed: {e}")
             try:
-                self.status_sleep_task = asyncio.ensure_future(asyncio.sleep(self.status_interval))
+                self.status_sleep_task = asyncio.ensure_future(
+                    asyncio.sleep(self.status_interval)
+                )
                 await self.status_sleep_task
             except asyncio.CancelledError:
                 pass
@@ -680,8 +800,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     @classmethod
     def add_arguments(cls, parser):
         super(ATDomeCsc, cls).add_arguments(parser)
-        parser.add_argument("-s", "--simulate", action="store_true",
-                            help="Run in simuation mode?")
+        parser.add_argument(
+            "-s", "--simulate", action="store_true", help="Run in simuation mode?"
+        )
 
     @classmethod
     def add_kwargs_from_args(cls, args, kwargs):

@@ -30,6 +30,7 @@ from lsst.ts import salobj
 
 class ValidationTestCase(unittest.TestCase):
     """Test validation of the config schema."""
+
     def setUp(self):
         schemaname = "ATDome.yaml"
         pkg_dir = pathlib.Path(__file__).parents[1]
@@ -38,11 +39,9 @@ class ValidationTestCase(unittest.TestCase):
             rawschema = f.read()
         self.schema = yaml.safe_load(rawschema)
         self.validator = salobj.DefaultingValidator(schema=self.schema)
-        self.default = dict(host="192.168.223.14",
-                            port=17310,
-                            connection_timeout=10,
-                            read_timeout=10,
-                            )
+        self.default = dict(
+            host="192.168.223.14", port=17310, connection_timeout=10, read_timeout=10
+        )
 
     def test_default(self):
         result = self.validator.validate(None)
@@ -50,10 +49,7 @@ class ValidationTestCase(unittest.TestCase):
             self.assertEqual(result[field], expected_value)
 
     def test_some_specified(self):
-        data = dict(host="1.2.3.4",
-                    port=2345,
-                    connection_timeout=3.4,
-                    read_timeout=4.5)
+        data = dict(host="1.2.3.4", port=2345, connection_timeout=3.4, read_timeout=4.5)
         for field, value in data.items():
             one_field_data = {field: value}
             with self.subTest(one_field_data=one_field_data):
@@ -65,10 +61,7 @@ class ValidationTestCase(unittest.TestCase):
                         self.assertEqual(result[field], default_value)
 
     def test_all_specified(self):
-        data = dict(host="1.2.3.4",
-                    port=2345,
-                    connection_timeout=3.4,
-                    read_timeout=4.5)
+        data = dict(host="1.2.3.4", port=2345, connection_timeout=3.4, read_timeout=4.5)
         data_copy = data.copy()
         result = self.validator.validate(data)
         self.assertEqual(data, data_copy)
