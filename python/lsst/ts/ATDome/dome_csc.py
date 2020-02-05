@@ -281,6 +281,14 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         ----------
         cmd : `str`
             The command to send, e.g. "5.0 MV", "SO" or "?".
+
+        Raises
+        ------
+        salobj.ExpectedError
+            If communication fails. Also an exception is logged,
+            the CSC disconnects from the low level controller,
+            and goes into FAULT state.
+            If the wrong number of lines is read. Also a warning is logged.
         """
         if not self.connected:
             if self.disabled_or_enabled and not self.connect_task.done():
@@ -305,7 +313,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 self.log.exception(err_msg)
                 await self.disconnect()
                 self.fault(code=2, report=f"{err_msg}: {e}")
-                return
+                raise salobj.ExpectedError(err_msg)
 
             data = read_bytes.decode()
             lines = data.split("\n")[:-1]  # strip final > line
@@ -314,7 +322,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 self.log.warning(
                     f"Command {cmd} returned {data}; expected {expected_lines} lines"
                 )
-                return
+                raise salobj.ExpectedError(err_msg)
             if cmd == "?":
                 if self.handle_short_status(lines):
                     self.evt_settingsAppliedDomeController.put()
@@ -543,20 +551,29 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             # this should never happen, but be paranoid
             return
 
-        # halt all motion (we just want to stop azimuth,
-        # but there is no way to do that)
+        # Halt all motion, if possible. We just want to stop azimuth,
+        # but there is no way to do that.
         self.evt_azimuthCommandedState.set_put(
             commandedState=AzimuthCommandedState.STOP, force_output=True
         )
-        await self.run_command("ST")
-        # close the shutter
+        try:
+            await self.run_command("ST")
+        except salobj.ExpectedError:
+            # We tried. A message has been logged.
+            pass
+
+        # Close the shutter, if possible.
         self.evt_dropoutDoorCommandedState.set_put(
             commandedState=ShutterDoorCommandedState.CLOSED, force_output=True
         )
         self.evt_mainDoorCommandedState.set_put(
             commandedState=ShutterDoorCommandedState.CLOSED, force_output=True
         )
-        await self.run_command("SC")
+        try:
+            await self.run_command("SC")
+        except salobj.ExpectedError:
+            # We tried. A message has been logged.
+            pass
         self.status_sleep_task.cancel()
 
     async def disconnect(self):
