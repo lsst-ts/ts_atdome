@@ -321,9 +321,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             lines = data.split("\n")[:-1]  # strip final > line
             lines = [elt.strip() for elt in lines]
             if len(lines) != expected_lines:
-                self.log.warning(
-                    f"Command {cmd} returned {data}; expected {expected_lines} lines"
-                )
+                err_msg = f"Command {cmd} returned {data!r}; expected {expected_lines} lines"
+                self.log.error(err_msg)
                 raise salobj.ExpectedError(err_msg)
             elif cmd == "+":
                 self.handle_status(lines)

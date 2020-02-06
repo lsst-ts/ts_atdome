@@ -170,6 +170,9 @@ class MockDomeController:
         self.scb_link_ok = True
         self.auto_shutdown_enabled = True
         self.estop_active = False
+        # Name of a command to report as failed once, the next time it is seen,
+        # or None if no failures. Used to test CSC handling of failed commands.
+        self.fail_command = None
 
         self.last_rot_right = None
         self.log = logging.getLogger("MockDomeController")
@@ -251,16 +254,20 @@ class MockDomeController:
                     cmd = items[-1]
                     if cmd not in self.dispatch_dict:
                         raise KeyError(f"Unsupported command {cmd}")
-                    has_data, func = self.dispatch_dict[cmd]
-                    desired_len = 2 if has_data else 1
-                    if len(items) != desired_len:
-                        raise RuntimeError(
-                            f"{line} split into {len(items)} pieces; expected {desired_len}"
-                        )
-                    if has_data:
-                        outputs = func(items[0])
+                    if cmd == self.fail_command:
+                        self.fail_command = None
+                        outputs = [f"Command {cmd} failed by request"]
                     else:
-                        outputs = func()
+                        has_data, func = self.dispatch_dict[cmd]
+                        desired_len = 2 if has_data else 1
+                        if len(items) != desired_len:
+                            raise RuntimeError(
+                                f"{line} split into {len(items)} pieces; expected {desired_len}"
+                            )
+                        if has_data:
+                            outputs = func(items[0])
+                        else:
+                            outputs = func()
                     if outputs:
                         for msg in outputs:
                             writer.write(f"{msg}\n".encode())

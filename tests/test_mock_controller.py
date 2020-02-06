@@ -109,6 +109,15 @@ class MockTestCase(asynctest.TestCase):
         )
         self.assertAlmostEqual(status.door_move_timeout, self.ctrl.door_move_timeout)
 
+    async def test_fail_cmd(self):
+        self.ctrl.fail_command = "+"
+        reply_lines = await self.send_cmd("+")
+        self.assertEqual(len(reply_lines), 1)
+        self.assertIn("failed", reply_lines[0])
+        # Make sure the command is only failed once.
+        reply_lines = await self.send_cmd("+")
+        self.assertEqual(len(reply_lines), 25)
+
     async def test_move_az(self):
         daz = -3
         az = 360 + daz

@@ -86,16 +86,26 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 encoderCountsPer360=mock_ctrl.encoder_counts_per_360,
             )
             self.assertAlmostEqual(ctrllr_settings.tolerance, mock_ctrl.tolerance.deg)
+            self.assertAlmostEqual(ctrllr_settings.homeAzimuth, mock_ctrl.home_az.deg)
             self.assertAlmostEqual(
-                ctrllr_settings.homeAzimuth, mock_ctrl.home_az.deg
+                ctrllr_settings.highSpeedDistance, mock_ctrl.high_speed.deg
             )
-            self.assertAlmostEqual(ctrllr_settings.highSpeedDistance, mock_ctrl.high_speed.deg)
-            self.assertAlmostEqual(ctrllr_settings.watchdogTimer, mock_ctrl.watchdog_reset_time)
-            self.assertAlmostEqual(ctrllr_settings.dropoutTimer, mock_ctrl.dropout_timer)
-            self.assertAlmostEqual(ctrllr_settings.reversalDelay, mock_ctrl.reverse_delay)
+            self.assertAlmostEqual(
+                ctrllr_settings.watchdogTimer, mock_ctrl.watchdog_reset_time
+            )
+            self.assertAlmostEqual(
+                ctrllr_settings.dropoutTimer, mock_ctrl.dropout_timer
+            )
+            self.assertAlmostEqual(
+                ctrllr_settings.reversalDelay, mock_ctrl.reverse_delay
+            )
             self.assertAlmostEqual(ctrllr_settings.coast, mock_ctrl.coast.deg)
-            self.assertAlmostEqual(ctrllr_settings.azimuthMoveTimeout, mock_ctrl.az_move_timeout)
-            self.assertAlmostEqual(ctrllr_settings.doorMoveTimeout, mock_ctrl.door_move_timeout)
+            self.assertAlmostEqual(
+                ctrllr_settings.azimuthMoveTimeout, mock_ctrl.az_move_timeout
+            )
+            self.assertAlmostEqual(
+                ctrllr_settings.doorMoveTimeout, mock_ctrl.door_move_timeout
+            )
 
             await self.assert_next_sample(
                 topic=self.remote.evt_doorEncoderExtremes,
@@ -157,6 +167,23 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             all_fields_data = yaml.safe_load(all_fields_raw)
             for field, value in all_fields_data.items():
                 self.assertEqual(getattr(self.csc.config, field), value)
+
+    async def test_command_failures(self):
+        """Test what happens when the mock controller fails a command.
+        """
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
+        ):
+            # Check that a CSC command fails if the low-level command fails.
+            self.csc.mock_ctrl.fail_command = "SO"  # Open both doors
+            with salobj.assertRaisesAckError():
+                await self.remote.cmd_openShutter.start(timeout=STD_TIMEOUT)
+
+            # Check that the status loop keeps running even if
+            # the low-level status command fails.
+            self.csc.mock_ctrl.fail_command = "+"  # Full status
+            await self.remote.tel_position.next(flush=True, timeout=STD_TIMEOUT)
+            await self.remote.tel_position.next(flush=True, timeout=STD_TIMEOUT)
 
     async def test_home(self):
         async with self.make_csc(
