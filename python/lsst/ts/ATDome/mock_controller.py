@@ -131,10 +131,23 @@ class MockDomeController:
         self.port = port
         self.door_time = door_time
         self.az_vel = Angle(az_vel, u.deg)
+        self.high_speed = Angle(5, u.deg)
+        self.coast = Angle(0.2, u.deg)
+        self.tolerance = Angle(1.0, u.deg)
         self.home_az = Angle(10, u.deg)
         self.home_az_overshoot = Angle(home_az_overshoot, u.deg)
         self.home_az_vel = Angle(home_az_vel, u.deg)
+        self.encoder_counts_per_360 = 4018143232
         self.az_actuator = AzActuator(start_position=0, speed=az_vel)
+        self.az_move_timeout = 120
+        self.watchdog_reset_time = 600
+        self.dropout_timer = 100
+        self.reverse_delay = 2
+        self.main_door_encoder_closed = 1856
+        self.main_door_encoder_opened = 456540
+        self.dropout_door_encoder_closed = 7156
+        self.dropout_door_encoder_opened = 10321
+        self.door_move_timeout = 10
         self.door_actuators = dict(
             (
                 enum,
@@ -358,27 +371,28 @@ class MockDomeController:
 
     def do_full_status(self):
         """Create full status as a list of strings."""
+        az_encoder_counts = int(self.home_az.deg * self.encoder_counts_per_360 / 360)
         outputs = self.do_short_status()
         outputs.append(f"Emergency Stop Active: {1 if self.estop_active else 0}")
         outputs.append(f"Top Comm Link OK:    {1 if self.scb_link_ok else 0}")
-        outputs.append(f"Home Azimuth: {self.home_az.deg:05.2f}")
-        outputs.append(f"High Speed (degrees): {self.az_vel:05.2f}")
-        outputs.append("Coast (degrees): 0.20")
-        outputs.append("Tolerance (degrees): 1.00")
-        outputs.append("Encoder Counts per 360: 490496")
-        outputs.append("Encoder Counts:   1485289")
-        outputs.append(f"Last Azimuth GoTo:   {self.az_actuator.end_position:05.2f}")
-        outputs.append("Azimuth Move Timeout (secs): 120")
+        outputs.append(f"Home Azimuth: {self.home_az.deg:5.2f}")
+        outputs.append(f"High Speed (degrees): {self.high_speed.deg:5.2f}")
+        outputs.append(f"Coast (degrees): {self.coast.deg:0.2f}")
+        outputs.append(f"Tolerance (degrees): {self.tolerance.deg:0.2f}")
+        outputs.append(f"Encoder Counts per 360: {self.encoder_counts_per_360:d}")
+        outputs.append(f"Encoder Counts:  {az_encoder_counts:d}")
+        outputs.append(f"Last Azimuth GoTo: {self.az_actuator.end_position:05.2f}")
+        outputs.append(f"Azimuth Move Timeout (secs): {self.az_move_timeout}")
         outputs.append(f"Rain-Snow enabled:  {1 if self.rain_enabled else 0}")
         outputs.append(f"Cloud Sensor enabled: {1 if self.clouds_enabled else 0}")
-        outputs.append("Watchdog Reset Time: 600")
-        outputs.append("Dropout Timer: 100")
-        outputs.append("Reverse Delay: 2")
-        outputs.append("Main Door Encoder Closed: 1856")
-        outputs.append("Main Door Encoder Opened: 456540")
-        outputs.append("Dropout Encoder Closed: 7156")
-        outputs.append("Dropout Encoder Opened: 10321")
-        outputs.append("Door Move Timeout (secs): 360")
+        outputs.append(f"Watchdog Reset Time: {self.watchdog_reset_time}")
+        outputs.append(f"Dropout Timer: {self.dropout_timer}")
+        outputs.append(f"Reverse Delay: {self.reverse_delay}")
+        outputs.append(f"Main Door Encoder Closed: {self.main_door_encoder_closed:d}")
+        outputs.append(f"Main Door Encoder Opened: {self.main_door_encoder_opened:d}")
+        outputs.append(f"Dropout Encoder Closed: {self.dropout_door_encoder_closed:d}")
+        outputs.append(f"Dropout Encoder Opened: {self.dropout_door_encoder_opened:d}")
+        outputs.append(f"Door Move Timeout (secs): {self.door_move_timeout}")
         return outputs
 
     def do_stop(self):

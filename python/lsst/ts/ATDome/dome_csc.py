@@ -36,7 +36,7 @@ from lsst.ts.idl.enums.ATDome import (
     ShutterDoorState,
 )
 from .mock_controller import MockDomeController
-from .status import ShortStatus, RemainingStatus
+from .status import Status
 
 _LOCAL_HOST = "127.0.0.1"
 
@@ -113,8 +113,6 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.move_code = 0
         self.mock_ctrl = None  # mock controller, or None of not constructed
         self.status_interval = 0.2  # delay between short status commands (sec)
-        self.n_short_status = 0
-        self.short_per_full = 5  # number of short status between full status
         self.az_tolerance = Angle(0.2, u.deg)  # tolerance for "in position"
         # Task for sleeping in the status loop; cancel this to trigger
         # an immediate status update. Warning: do not cancel status_task
@@ -280,7 +278,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         Parameters
         ----------
         cmd : `str`
-            The command to send, e.g. "5.0 MV", "SO" or "?".
+            The command to send, e.g. "5.0 MV", "SO" or "+".
 
         Raises
         ------
@@ -295,10 +293,14 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 await self.connect_task
             else:
                 raise RuntimeError("Not connected and not trying to connect")
+
         async with self.cmd_lock:
             self.writer.write(f"{cmd}\r\n".encode())
             await self.writer.drain()
-            expected_lines = {"?": 5, "+": 25}.get(cmd, 0)  # excluding final ">" line
+            if cmd == "?":
+                # Turn short status into long status
+                cmd = "+"
+            expected_lines = {"+": 25}.get(cmd, 0)  # excluding final ">" line
 
             try:
                 read_bytes = await asyncio.wait_for(
@@ -323,11 +325,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                     f"Command {cmd} returned {data}; expected {expected_lines} lines"
                 )
                 raise salobj.ExpectedError(err_msg)
-            if cmd == "?":
-                if self.handle_short_status(lines):
-                    self.evt_settingsAppliedDomeController.put()
             elif cmd == "+":
-                self.handle_full_status(lines)
+                self.handle_status(lines)
 
     def compute_in_position_mask(self, move_code):
         """Compute in_position_mask.
@@ -598,7 +597,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             )
         await self.stop_mock_ctrl()
 
-    def handle_short_status(self, lines):
+    def handle_status(self, lines):
         """Handle output of "?" command.
 
         Parameters
@@ -612,15 +611,14 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         settingsAppliedDomeController : `bool`
             True if ``self.evt_settingsAppliedDomeController`` updated.
         """
-        status = ShortStatus(lines)
+        status = Status(lines)
 
-        self.tel_position.data.mainDoorOpeningPercentage = status.main_door_pct
-        self.tel_position.data.dropoutDoorOpeningPercentage = status.dropout_door_pct
-        settings_updated = self.evt_settingsAppliedDomeController.set(
-            autoShutdownEnabled=status.auto_shutdown_enabled
+        self.tel_position.set_put(
+            mainDoorOpeningPercentage=status.main_door_pct,
+            dropoutDoorOpeningPercentage=status.dropout_door_pct,
+            azimuthPosition=status.az_pos.deg,
+            azimuthEncoderPosition=status.encoder_counts,
         )
-
-        self.tel_position.set_put(azimuthPosition=status.az_pos.deg)
 
         move_code = status.move_code
         self.evt_azimuthState.set_put(
@@ -667,7 +665,34 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             if end_shutter_task:
                 self.shutter_task.set_result(None)
 
-        return settings_updated
+        self.evt_emergencyStop.set_put(active=status.estop_active)
+
+        self.evt_scbLink.set_put(active=status.scb_link_ok)
+
+        self.evt_doorEncoderExtremes.set_put(
+            mainClosed=status.main_door_encoder_closed,
+            mainOpened=status.main_door_encoder_opened,
+            dropoutClosed=status.dropout_door_encoder_closed,
+            dropoutOpened=status.dropout_door_encoder_opened,
+        )
+
+        self.evt_lastAzimuthGoTo.set_put(position=status.last_azimuth_goto)
+
+        self.evt_settingsAppliedDomeController.set_put(
+            rainSensorEnabled=status.rain_sensor_enabled,
+            cloudSensorEnabled=status.cloud_sensor_enabled,
+            tolerance=status.tolerance.deg,
+            homeAzimuth=status.home_azimuth.deg,
+            highSpeedDistance=status.high_speed.deg,
+            watchdogTimer=status.watchdog_timer,
+            dropoutTimer=status.dropout_timer,
+            reversalDelay=status.reversal_delay,
+            autoShutdownEnabled=status.auto_shutdown_enabled,
+            coast=status.coast.deg,
+            encoderCountsPer360=status.encoder_counts_per_360,
+            azimuthMoveTimeout=status.azimuth_move_timeout,
+            doorMoveTimeout=status.door_move_timeout,
+        )
 
     async def wait_for_shutter(self, *, dropout_state, main_state):
         """Wait for the shutter doors to move to a specified position.
@@ -703,33 +728,6 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.shutter_task = asyncio.Future()
         self.status_sleep_task.cancel()
         await self.shutter_task
-
-    def handle_full_status(self, lines):
-        """Handle output of "+" command.
-        """
-        status = RemainingStatus(lines)
-
-        # The first five lines are identical to short status.
-        # Unfortunately they include one item of data for the
-        # settingsAppliedDomeController event: autoShutdownEnabled;
-        # settings_updated is set True if that changes
-        settings_updated = self.handle_short_status(lines[0:5])
-
-        self.evt_emergencyStop.set_put(active=status.estop_active)
-        self.evt_scbLink.set_put(active=status.scb_link_ok)
-
-        self.evt_settingsAppliedDomeController.set_put(
-            rainSensorEnabled=status.rain_sensor_enabled,
-            cloudSensorEnabled=status.cloud_sensor_enabled,
-            tolerance=status.tolerance.deg,
-            homeAzimuth=status.home_azimuth.deg,
-            highSpeedDistance=status.high_speed.deg,
-            watchdogTimer=status.watchdog_timer,
-            reversalDelay=status.reversal_delay,
-            force_output=settings_updated,
-        )
-
-        self.is_first_status = False
 
     async def implement_simulation_mode(self, simulation_mode):
         if simulation_mode not in (0, 1):
@@ -783,12 +781,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.status_sleep_task.cancel()
         while self.connected:
             try:
-                if self.n_short_status % self.short_per_full == 0:
-                    self.n_short_status = 0
-                    await self.run_command("+")
-                else:
-                    await self.run_command("?")
-                self.n_short_status += 1
+                await self.run_command("+")
             except Exception as e:
                 self.log.warning(f"Status request failed: {e}")
             try:

@@ -61,6 +61,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
         async with self.make_csc(
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
+            mock_ctrl = self.csc.mock_ctrl
             await self.check_initial_shutter_events()
 
             await self.check_initial_az_events()
@@ -76,6 +77,33 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 mainDoorOpeningPercentage=0,
             )
             self.assertAlmostEqual(position.azimuthPosition, 0)
+
+            ctrllr_settings = await self.assert_next_sample(
+                topic=self.remote.evt_settingsAppliedDomeController,
+                rainSensorEnabled=True,
+                cloudSensorEnabled=True,
+                autoShutdownEnabled=True,
+                encoderCountsPer360=mock_ctrl.encoder_counts_per_360,
+            )
+            self.assertAlmostEqual(ctrllr_settings.tolerance, mock_ctrl.tolerance.deg)
+            self.assertAlmostEqual(
+                ctrllr_settings.homeAzimuth, mock_ctrl.home_az.deg
+            )
+            self.assertAlmostEqual(ctrllr_settings.highSpeedDistance, mock_ctrl.high_speed.deg)
+            self.assertAlmostEqual(ctrllr_settings.watchdogTimer, mock_ctrl.watchdog_reset_time)
+            self.assertAlmostEqual(ctrllr_settings.dropoutTimer, mock_ctrl.dropout_timer)
+            self.assertAlmostEqual(ctrllr_settings.reversalDelay, mock_ctrl.reverse_delay)
+            self.assertAlmostEqual(ctrllr_settings.coast, mock_ctrl.coast.deg)
+            self.assertAlmostEqual(ctrllr_settings.azimuthMoveTimeout, mock_ctrl.az_move_timeout)
+            self.assertAlmostEqual(ctrllr_settings.doorMoveTimeout, mock_ctrl.door_move_timeout)
+
+            await self.assert_next_sample(
+                topic=self.remote.evt_doorEncoderExtremes,
+                mainClosed=mock_ctrl.main_door_encoder_closed,
+                mainOpened=mock_ctrl.main_door_encoder_opened,
+                dropoutClosed=mock_ctrl.dropout_door_encoder_closed,
+                dropoutOpened=mock_ctrl.dropout_door_encoder_opened,
+            )
 
             await self.assert_next_sample(
                 topic=self.remote.evt_settingsAppliedDomeTcp,

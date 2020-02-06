@@ -33,7 +33,7 @@ port_generator = salobj.index_generator(imin=3100)
 
 
 class MockTestCase(asynctest.TestCase):
-    """Test MockDomeController, ShortStatus and LongStatus
+    """Test MockDomeController, Status and LongStatus
     """
 
     async def setUp(self):
@@ -72,38 +72,42 @@ class MockTestCase(asynctest.TestCase):
         read_str = read_bytes.decode()[0:-1].strip()
         return read_str.split("\n")
 
-    async def test_initial_short_status(self):
-        reply_lines = await self.send_cmd("?")
-
-        status = ATDome.ShortStatus(reply_lines)
-        self.assertEqual(status.main_door_pct, 0)
-        self.assertEqual(status.dropout_door_pct, 0)
-        self.assertTrue(status.auto_shutdown_enabled)
-        self.assertEqual(status.sensor_code, 0)
-        self.assertAlmostEqual(status.az_pos.deg, 0)
-        self.assertEqual(status.move_code, 0)
-
     async def test_initial_full_status(self):
         reply_lines = await self.send_cmd("+")
 
-        status = ATDome.ShortStatus(reply_lines[0:5])
+        status = ATDome.Status(reply_lines)
         self.assertEqual(status.main_door_pct, 0)
         self.assertEqual(status.dropout_door_pct, 0)
         self.assertTrue(status.auto_shutdown_enabled)
         self.assertEqual(status.sensor_code, 0)
         self.assertAlmostEqual(status.az_pos.deg, 0)
         self.assertEqual(status.move_code, 0)
-
-        rem_status = ATDome.RemainingStatus(reply_lines)
-        self.assertFalse(rem_status.estop_active)
-        self.assertTrue(rem_status.scb_link_ok)
-        self.assertTrue(rem_status.rain_sensor_enabled)
-        self.assertTrue(rem_status.cloud_sensor_enabled)
-        self.assertAlmostEqual(rem_status.tolerance.deg, 1)
-        self.assertAlmostEqual(rem_status.home_azimuth.deg, self.ctrl.home_az.deg)
-        self.assertAlmostEqual(rem_status.high_speed.deg, 6)
-        self.assertAlmostEqual(rem_status.watchdog_timer, 600)
-        self.assertAlmostEqual(rem_status.reversal_delay, 2)
+        self.assertFalse(status.estop_active)
+        self.assertTrue(status.scb_link_ok)
+        self.assertTrue(status.rain_sensor_enabled)
+        self.assertTrue(status.cloud_sensor_enabled)
+        self.assertAlmostEqual(status.coast.deg, self.ctrl.coast.deg)
+        self.assertAlmostEqual(status.tolerance.deg, self.ctrl.tolerance.deg)
+        self.assertAlmostEqual(status.home_azimuth.deg, self.ctrl.home_az.deg)
+        self.assertAlmostEqual(status.high_speed.deg, self.ctrl.high_speed.deg)
+        self.assertAlmostEqual(status.watchdog_timer, self.ctrl.watchdog_reset_time)
+        self.assertAlmostEqual(status.reversal_delay, self.ctrl.reverse_delay)
+        self.assertEqual(
+            status.encoder_counts_per_360, self.ctrl.encoder_counts_per_360
+        )
+        self.assertEqual(
+            status.main_door_encoder_closed, self.ctrl.main_door_encoder_closed
+        )
+        self.assertEqual(
+            status.main_door_encoder_opened, self.ctrl.main_door_encoder_opened
+        )
+        self.assertEqual(
+            status.dropout_door_encoder_closed, self.ctrl.dropout_door_encoder_closed
+        )
+        self.assertEqual(
+            status.dropout_door_encoder_opened, self.ctrl.dropout_door_encoder_opened
+        )
+        self.assertAlmostEqual(status.door_move_timeout, self.ctrl.door_move_timeout)
 
     async def test_move_az(self):
         daz = -3
@@ -112,16 +116,16 @@ class MockTestCase(asynctest.TestCase):
         reply_lines = await self.send_cmd(f"{az:0.2f} MV")
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertLess(status.az_pos.deg, 360)
         self.assertGreater(status.az_pos.deg, 357)
         self.assertEqual(status.move_code, 2)
 
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertAlmostEqual(status.az_pos.deg, 357)
         self.assertEqual(status.move_code, 0)
 
@@ -137,15 +141,15 @@ class MockTestCase(asynctest.TestCase):
 
         # sleep until halfway through CCW motion and check status
         await asyncio.sleep(est_ccw_duration / 2)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertEqual(status.move_code, 2 + 64)
         self.assertAlmostEqual(self.ctrl.az_actuator.speed.deg, self.ctrl.az_vel.deg)
 
         # sleep until halfway through CW motion and check status
         await asyncio.sleep(self.ctrl.az_actuator.remaining_time + est_ccw_duration / 2)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertEqual(status.move_code, 1 + 64)
         self.assertAlmostEqual(
             self.ctrl.az_actuator.speed.deg, self.ctrl.home_az_vel.deg
@@ -153,8 +157,8 @@ class MockTestCase(asynctest.TestCase):
 
         # sleep until we're done and check status
         await asyncio.sleep(self.ctrl.az_actuator.remaining_time + 0.1)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertEqual(status.move_code, 0)
         self.assertAlmostEqual(self.ctrl.az_actuator.speed.deg, self.ctrl.az_vel.deg)
         self.assertAlmostEqual(
@@ -168,16 +172,16 @@ class MockTestCase(asynctest.TestCase):
         reply_lines = await self.send_cmd("OP")
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertLess(status.main_door_pct, 100)
         self.assertGreater(status.main_door_pct, 0)
         self.assertEqual(status.move_code, 8)
 
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertAlmostEqual(status.main_door_pct, 100)
         self.assertEqual(status.move_code, 0)
 
@@ -185,16 +189,16 @@ class MockTestCase(asynctest.TestCase):
         reply_lines = await self.send_cmd("CL")
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertLess(status.main_door_pct, 100)
         self.assertGreater(status.main_door_pct, 0)
         self.assertEqual(status.move_code, 4)
 
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertAlmostEqual(status.main_door_pct, 0)
         self.assertEqual(status.move_code, 0)
 
@@ -205,16 +209,16 @@ class MockTestCase(asynctest.TestCase):
         reply_lines = await self.send_cmd("DN")
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertLess(status.dropout_door_pct, 100)
         self.assertGreater(status.dropout_door_pct, 0)
         self.assertEqual(status.move_code, 32)
 
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertAlmostEqual(status.dropout_door_pct, 100)
         self.assertEqual(status.move_code, 0)
 
@@ -222,16 +226,16 @@ class MockTestCase(asynctest.TestCase):
         reply_lines = await self.send_cmd("UP")
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertLess(status.dropout_door_pct, 100)
         self.assertGreater(status.dropout_door_pct, 0)
         self.assertEqual(status.move_code, 16)
 
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertAlmostEqual(status.dropout_door_pct, 0)
         self.assertEqual(status.move_code, 0)
 
@@ -242,8 +246,8 @@ class MockTestCase(asynctest.TestCase):
         reply_lines = await self.send_cmd("SO")
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertLess(status.main_door_pct, 100)
         self.assertGreater(status.main_door_pct, 0)
         self.assertLess(status.dropout_door_pct, 100)
@@ -252,8 +256,8 @@ class MockTestCase(asynctest.TestCase):
 
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertAlmostEqual(status.main_door_pct, 100)
         self.assertAlmostEqual(status.dropout_door_pct, 100)
         self.assertEqual(status.move_code, 0)
@@ -262,8 +266,8 @@ class MockTestCase(asynctest.TestCase):
         reply_lines = await self.send_cmd("SC")
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertLess(status.main_door_pct, 100)
         self.assertGreater(status.main_door_pct, 0)
         self.assertLess(status.dropout_door_pct, 100)
@@ -272,8 +276,8 @@ class MockTestCase(asynctest.TestCase):
 
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertAlmostEqual(status.main_door_pct, 0)
         self.assertAlmostEqual(status.dropout_door_pct, 0)
         self.assertEqual(status.move_code, 0)
@@ -292,8 +296,8 @@ class MockTestCase(asynctest.TestCase):
         # wait for the moves to get about halfway and stop
         await asyncio.sleep(est_duration / 2)
         reply_lines = await self.send_cmd("ST")
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertLess(status.az_pos.deg, az.deg)
         self.assertGreater(status.az_pos.deg, 0)
         self.assertLess(status.main_door_pct, 100)
@@ -305,8 +309,8 @@ class MockTestCase(asynctest.TestCase):
     async def test_short_status(self):
         self.ctrl.auto_shutdown_enabled = False
 
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertFalse(status.auto_shutdown_enabled)
         self.assertEqual(status.sensor_code, 0)
         self.assertEqual(status.move_code, 0)
@@ -314,24 +318,24 @@ class MockTestCase(asynctest.TestCase):
         self.ctrl.auto_shutdown_enabled = True
         self.ctrl.rain_detected = True
 
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertTrue(status.auto_shutdown_enabled)
         self.assertEqual(status.sensor_code, 1)
         self.assertEqual(status.move_code, 0)
 
         self.ctrl.clouds_detected = True
 
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertTrue(status.auto_shutdown_enabled)
         self.assertEqual(status.sensor_code, 3)
         self.assertEqual(status.move_code, 0)
 
         self.ctrl.rain_detected = False
 
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertTrue(status.auto_shutdown_enabled)
         self.assertEqual(status.sensor_code, 2)
         self.assertEqual(status.move_code, 0)
@@ -339,8 +343,8 @@ class MockTestCase(asynctest.TestCase):
         self.ctrl.clouds_detected = False
         self.ctrl.estop_active = True
 
-        reply_lines = await self.send_cmd("?")
-        status = ATDome.ShortStatus(reply_lines)
+        reply_lines = await self.send_cmd("+")
+        status = ATDome.Status(reply_lines)
         self.assertTrue(status.auto_shutdown_enabled)
         self.assertEqual(status.move_code, 128)
 
@@ -348,41 +352,41 @@ class MockTestCase(asynctest.TestCase):
         self.ctrl.rain_enabled = False
 
         reply_lines = await self.send_cmd("+")
-        rem_status = ATDome.RemainingStatus(reply_lines)
-        self.assertFalse(rem_status.estop_active)
-        self.assertTrue(rem_status.scb_link_ok)
-        self.assertFalse(rem_status.rain_sensor_enabled)
-        self.assertTrue(rem_status.cloud_sensor_enabled)
+        status = ATDome.Status(reply_lines)
+        self.assertFalse(status.estop_active)
+        self.assertTrue(status.scb_link_ok)
+        self.assertFalse(status.rain_sensor_enabled)
+        self.assertTrue(status.cloud_sensor_enabled)
 
         self.ctrl.rain_enabled = True
         self.ctrl.clouds_enabled = False
 
         reply_lines = await self.send_cmd("+")
-        rem_status = ATDome.RemainingStatus(reply_lines)
-        self.assertFalse(rem_status.estop_active)
-        self.assertTrue(rem_status.scb_link_ok)
-        self.assertTrue(rem_status.rain_sensor_enabled)
-        self.assertFalse(rem_status.cloud_sensor_enabled)
+        status = ATDome.Status(reply_lines)
+        self.assertFalse(status.estop_active)
+        self.assertTrue(status.scb_link_ok)
+        self.assertTrue(status.rain_sensor_enabled)
+        self.assertFalse(status.cloud_sensor_enabled)
 
         self.ctrl.clouds_enabled = True
         self.ctrl.scb_link_ok = False
 
         reply_lines = await self.send_cmd("+")
-        rem_status = ATDome.RemainingStatus(reply_lines)
-        self.assertFalse(rem_status.estop_active)
-        self.assertFalse(rem_status.scb_link_ok)
-        self.assertTrue(rem_status.rain_sensor_enabled)
-        self.assertTrue(rem_status.cloud_sensor_enabled)
+        status = ATDome.Status(reply_lines)
+        self.assertFalse(status.estop_active)
+        self.assertFalse(status.scb_link_ok)
+        self.assertTrue(status.rain_sensor_enabled)
+        self.assertTrue(status.cloud_sensor_enabled)
 
         self.ctrl.scb_link_ok = True
         self.ctrl.estop_active = True
 
         reply_lines = await self.send_cmd("+")
-        rem_status = ATDome.RemainingStatus(reply_lines)
-        self.assertTrue(rem_status.estop_active)
-        self.assertTrue(rem_status.scb_link_ok)
-        self.assertTrue(rem_status.rain_sensor_enabled)
-        self.assertTrue(rem_status.cloud_sensor_enabled)
+        status = ATDome.Status(reply_lines)
+        self.assertTrue(status.estop_active)
+        self.assertTrue(status.scb_link_ok)
+        self.assertTrue(status.rain_sensor_enabled)
+        self.assertTrue(status.cloud_sensor_enabled)
 
 
 if __name__ == "__main__":
