@@ -148,9 +148,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         if self.evt_azimuthState.data.homing:
             raise salobj.ExpectedError("Cannot move azimuth while homing")
         azimuth = data.azimuth
-        if azimuth < 0 or azimuth > 360:
+        if azimuth < 0 or azimuth >= 360:
             raise salobj.ExpectedError(
-                f"azimuth={azimuth} deg; must be in range [0, 360]"
+                f"azimuth={azimuth} deg; must be in range [0, 360)"
             )
         await self.run_command(f"{azimuth:0.3f} MV")
         self.evt_azimuthCommandedState.set_put(
