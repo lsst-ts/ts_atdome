@@ -78,14 +78,14 @@ class MockTestCase(asynctest.TestCase):
         status = ATDome.Status(reply_lines)
         self.assertEqual(status.main_door_pct, 0)
         self.assertEqual(status.dropout_door_pct, 0)
-        self.assertTrue(status.auto_shutdown_enabled)
+        self.assertEqual(status.auto_shutdown_enabled, self.ctrl.auto_shutdown_enabled)
         self.assertEqual(status.sensor_code, 0)
         self.assertAlmostEqual(status.az_pos.deg, 0)
         self.assertEqual(status.move_code, 0)
-        self.assertFalse(status.estop_active)
-        self.assertTrue(status.scb_link_ok)
-        self.assertTrue(status.rain_sensor_enabled)
-        self.assertTrue(status.cloud_sensor_enabled)
+        self.assertEqual(status.estop_active, self.ctrl.estop_active)
+        self.assertEqual(status.scb_link_ok, self.ctrl.scb_link_ok)
+        self.assertEqual(status.rain_sensor_enabled, self.ctrl.rain_sensor_enabled)
+        self.assertEqual(status.cloud_sensor_enabled, self.ctrl.cloud_sensor_enabled)
         self.assertAlmostEqual(status.coast.deg, self.ctrl.coast.deg)
         self.assertAlmostEqual(status.tolerance.deg, self.ctrl.tolerance.deg)
         self.assertAlmostEqual(status.home_azimuth.deg, self.ctrl.home_az.deg)
@@ -315,87 +315,34 @@ class MockTestCase(asynctest.TestCase):
         self.assertGreater(status.dropout_door_pct, 0)
         self.assertEqual(status.move_code, 0)
 
-    async def test_short_status(self):
-        self.ctrl.auto_shutdown_enabled = False
-
-        reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
-        self.assertFalse(status.auto_shutdown_enabled)
-        self.assertEqual(status.sensor_code, 0)
-        self.assertEqual(status.move_code, 0)
-
-        self.ctrl.auto_shutdown_enabled = True
-        self.ctrl.rain_detected = True
-
-        reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
-        self.assertTrue(status.auto_shutdown_enabled)
-        self.assertEqual(status.sensor_code, 1)
-        self.assertEqual(status.move_code, 0)
-
-        self.ctrl.clouds_detected = True
-
-        reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
-        self.assertTrue(status.auto_shutdown_enabled)
-        self.assertEqual(status.sensor_code, 3)
-        self.assertEqual(status.move_code, 0)
-
-        self.ctrl.rain_detected = False
-
-        reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
-        self.assertTrue(status.auto_shutdown_enabled)
-        self.assertEqual(status.sensor_code, 2)
-        self.assertEqual(status.move_code, 0)
-
-        self.ctrl.clouds_detected = False
-        self.ctrl.estop_active = True
-
-        reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
-        self.assertTrue(status.auto_shutdown_enabled)
-        self.assertEqual(status.move_code, 128)
-
     async def test_long_status(self):
         self.ctrl.rain_enabled = False
 
         reply_lines = await self.send_cmd("+")
         status = ATDome.Status(reply_lines)
-        self.assertFalse(status.estop_active)
-        self.assertTrue(status.scb_link_ok)
-        self.assertFalse(status.rain_sensor_enabled)
-        self.assertTrue(status.cloud_sensor_enabled)
+        self.assertEqual(status.estop_active, self.ctrl.estop_active)
+        self.assertEqual(status.scb_link_ok, status.scb_link_ok)
+        self.assertEqual(status.rain_sensor_enabled, self.ctrl.rain_sensor_enabled)
+        self.assertEqual(status.cloud_sensor_enabled, self.ctrl.cloud_sensor_enabled)
 
-        self.ctrl.rain_enabled = True
-        self.ctrl.clouds_enabled = False
+        # Toggle several values, one at a time, and check that the output
+        # is updated as expected
+        for name in (
+            "estop_active",
+            "scb_link_ok",
+            "rain_sensor_enabled",
+            "cloud_sensor_enabled",
+        ):
+            setattr(self.ctrl, name, not getattr(self.ctrl, name))
 
-        reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
-        self.assertFalse(status.estop_active)
-        self.assertTrue(status.scb_link_ok)
-        self.assertTrue(status.rain_sensor_enabled)
-        self.assertFalse(status.cloud_sensor_enabled)
-
-        self.ctrl.clouds_enabled = True
-        self.ctrl.scb_link_ok = False
-
-        reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
-        self.assertFalse(status.estop_active)
-        self.assertFalse(status.scb_link_ok)
-        self.assertTrue(status.rain_sensor_enabled)
-        self.assertTrue(status.cloud_sensor_enabled)
-
-        self.ctrl.scb_link_ok = True
-        self.ctrl.estop_active = True
-
-        reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
-        self.assertTrue(status.estop_active)
-        self.assertTrue(status.scb_link_ok)
-        self.assertTrue(status.rain_sensor_enabled)
-        self.assertTrue(status.cloud_sensor_enabled)
+            reply_lines = await self.send_cmd("+")
+            status = ATDome.Status(reply_lines)
+            self.assertEqual(status.estop_active, self.ctrl.estop_active)
+            self.assertEqual(status.scb_link_ok, status.scb_link_ok)
+            self.assertEqual(status.rain_sensor_enabled, self.ctrl.rain_sensor_enabled)
+            self.assertEqual(
+                status.cloud_sensor_enabled, self.ctrl.cloud_sensor_enabled
+            )
 
 
 if __name__ == "__main__":

@@ -80,9 +80,9 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
 
             ctrllr_settings = await self.assert_next_sample(
                 topic=self.remote.evt_settingsAppliedDomeController,
-                rainSensorEnabled=True,
-                cloudSensorEnabled=True,
-                autoShutdownEnabled=True,
+                rainSensorEnabled=mock_ctrl.rain_sensor_enabled,
+                cloudSensorEnabled=mock_ctrl.cloud_sensor_enabled,
+                autoShutdownEnabled=mock_ctrl.auto_shutdown_enabled,
                 encoderCountsPer360=mock_ctrl.encoder_counts_per_360,
             )
             self.assertAlmostEqual(ctrllr_settings.tolerance, mock_ctrl.tolerance.deg)

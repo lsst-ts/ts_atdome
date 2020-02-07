@@ -132,7 +132,7 @@ class MockDomeController:
         self.door_time = door_time
         self.az_vel = Angle(az_vel, u.deg)
         self.high_speed = Angle(5, u.deg)
-        self.coast = Angle(0.2, u.deg)
+        self.coast = Angle(0.5, u.deg)
         self.tolerance = Angle(1.0, u.deg)
         self.home_az = Angle(10, u.deg)
         self.home_az_overshoot = Angle(home_az_overshoot, u.deg)
@@ -141,13 +141,13 @@ class MockDomeController:
         self.az_actuator = AzActuator(start_position=0, speed=az_vel)
         self.az_move_timeout = 120
         self.watchdog_reset_time = 600
-        self.dropout_timer = 100
-        self.reverse_delay = 2
-        self.main_door_encoder_closed = 1856
-        self.main_door_encoder_opened = 456540
-        self.dropout_door_encoder_closed = 7156
-        self.dropout_door_encoder_opened = 10321
-        self.door_move_timeout = 10
+        self.dropout_timer = 5
+        self.reverse_delay = 4
+        self.main_door_encoder_closed = 118449181478
+        self.main_door_encoder_opened = 8287616388
+        self.dropout_door_encoder_closed = 5669776578
+        self.dropout_door_encoder_opened = 5710996184
+        self.door_move_timeout = 360
         self.door_actuators = dict(
             (
                 enum,
@@ -163,12 +163,12 @@ class MockDomeController:
 
         self._homing_task = None
         self._homing = False
-        self.rain_enabled = True
+        self.rain_sensor_enabled = True
         self.rain_detected = False
-        self.clouds_enabled = True
+        self.cloud_sensor_enabled = True
         self.clouds_detected = False
         self.scb_link_ok = True
-        self.auto_shutdown_enabled = True
+        self.auto_shutdown_enabled = False
         self.estop_active = False
         # Name of a command to report as failed once, the next time it is seen,
         # or None if no failures. Used to test CSC handling of failed commands.
@@ -390,8 +390,8 @@ class MockDomeController:
         outputs.append(f"Encoder Counts:  {az_encoder_counts:d}")
         outputs.append(f"Last Azimuth GoTo: {self.az_actuator.end_position:05.2f}")
         outputs.append(f"Azimuth Move Timeout (secs): {self.az_move_timeout}")
-        outputs.append(f"Rain-Snow enabled:  {1 if self.rain_enabled else 0}")
-        outputs.append(f"Cloud Sensor enabled: {1 if self.clouds_enabled else 0}")
+        outputs.append(f"Rain-Snow enabled:  {1 if self.rain_sensor_enabled else 0}")
+        outputs.append(f"Cloud Sensor enabled: {1 if self.cloud_sensor_enabled else 0}")
         outputs.append(f"Watchdog Reset Time: {self.watchdog_reset_time}")
         outputs.append(f"Dropout Timer: {self.dropout_timer}")
         outputs.append(f"Reverse Delay: {self.reverse_delay}")
