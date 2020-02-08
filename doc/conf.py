@@ -8,6 +8,8 @@ import lsst.ts.ATDome
 
 
 _g = globals()
-_g.update(build_package_configs(
-    project_name='ts_ATDome',
-    version=lsst.ts.ATDome.version.__version__))
+_g.update(
+    build_package_configs(
+        project_name="ts_ATDome", version=lsst.ts.ATDome.version.__version__
+    )
+)
