@@ -36,6 +36,7 @@ logging.basicConfig()
 
 class Door(enum.Flag):
     """Shutter door identifiers."""
+
     Main = enum.auto()
     Dropout = enum.auto()
 
@@ -51,17 +52,26 @@ class AzActuator(simactuators.PointToPointActuator):
       For instance a move from 355 deg to 0 deg is a move of 5 deg
       (in the direction of increasing azimuth).
     """
+
     def __init__(self, start_position, speed):
-        super().__init__(min_position=Angle(0, u.deg), max_position=Angle(360, u.deg),
-                         start_position=Angle(start_position, u.deg), speed=Angle(speed, u.deg))
+        super().__init__(
+            min_position=Angle(0, u.deg),
+            max_position=Angle(360, u.deg),
+            start_position=Angle(start_position, u.deg),
+            speed=Angle(speed, u.deg),
+        )
 
     @property
     def direction(self):
         """1 if moving or moved to greater azimuth, -1 otherwise."""
-        return 1 if salobj.angle_diff(self.end_position, self.start_position) > 0 else -1
+        return (
+            1 if salobj.angle_diff(self.end_position, self.start_position) > 0 else -1
+        )
 
     def _move_duration(self):
-        return abs(salobj.angle_diff(self.end_position, self.start_position)) / self.speed
+        return (
+            abs(salobj.angle_diff(self.end_position, self.start_position)) / self.speed
+        )
 
     @property
     def current_position(self):
@@ -108,29 +118,61 @@ class MockDomeController:
     * Encoder counts are not supported; reported values are bogus.
     * Door sequencing is not supported; doors move as if independent.
     """
-    def __init__(self, port, door_time=1, az_vel=6, home_az=10, home_az_overshoot=1, home_az_vel=1):
+
+    def __init__(
+        self,
+        port,
+        door_time=1,
+        az_vel=6,
+        home_az=10,
+        home_az_overshoot=1,
+        home_az_vel=1,
+    ):
         self.port = port
         self.door_time = door_time
         self.az_vel = Angle(az_vel, u.deg)
+        self.high_speed = Angle(5, u.deg)
+        self.coast = Angle(0.5, u.deg)
+        self.tolerance = Angle(1.0, u.deg)
         self.home_az = Angle(10, u.deg)
         self.home_az_overshoot = Angle(home_az_overshoot, u.deg)
         self.home_az_vel = Angle(home_az_vel, u.deg)
+        self.encoder_counts_per_360 = 4018143232
         self.az_actuator = AzActuator(start_position=0, speed=az_vel)
-        self.door_actuators = dict((enum, simactuators.PointToPointActuator(min_position=0,
-                                                                            max_position=100,
-                                                                            start_position=0,
-                                                                            speed=100/door_time))
-                                   for enum in Door)
+        self.az_move_timeout = 120
+        self.watchdog_reset_time = 600
+        self.dropout_timer = 5
+        self.reverse_delay = 4
+        self.main_door_encoder_closed = 118449181478
+        self.main_door_encoder_opened = 8287616388
+        self.dropout_door_encoder_closed = 5669776578
+        self.dropout_door_encoder_opened = 5710996184
+        self.door_move_timeout = 360
+        self.door_actuators = dict(
+            (
+                enum,
+                simactuators.PointToPointActuator(
+                    min_position=0,
+                    max_position=100,
+                    start_position=0,
+                    speed=100 / door_time,
+                ),
+            )
+            for enum in Door
+        )
 
         self._homing_task = None
         self._homing = False
-        self.rain_enabled = True
+        self.rain_sensor_enabled = True
         self.rain_detected = False
-        self.clouds_enabled = True
+        self.cloud_sensor_enabled = True
         self.clouds_detected = False
         self.scb_link_ok = True
-        self.auto_shutdown_enabled = True
+        self.auto_shutdown_enabled = False
         self.estop_active = False
+        # Name of a command to report as failed once, the next time it is seen,
+        # or None if no failures. Used to test CSC handling of failed commands.
+        self.fail_command = None
 
         self.last_rot_right = None
         self.log = logging.getLogger("MockDomeController")
@@ -148,8 +190,14 @@ class MockDomeController:
             "OP": (False, functools.partial(self.do_open_doors, Door.Main)),
             "UP": (False, functools.partial(self.do_close_doors, Door.Dropout)),
             "DN": (False, functools.partial(self.do_open_doors, Door.Dropout)),
-            "SC": (False, functools.partial(self.do_close_doors, Door.Main | Door.Dropout)),
-            "SO": (False, functools.partial(self.do_open_doors, Door.Main | Door.Dropout)),
+            "SC": (
+                False,
+                functools.partial(self.do_close_doors, Door.Main | Door.Dropout),
+            ),
+            "SO": (
+                False,
+                functools.partial(self.do_open_doors, Door.Main | Door.Dropout),
+            ),
             "HM": (False, self.do_home),
             "MV": (True, self.do_set_cmd_az),
         }
@@ -159,7 +207,9 @@ class MockDomeController:
 
         Set start_task done and start the command loop.
         """
-        self._server = await asyncio.start_server(self.cmd_loop, host="127.0.0.1", port=self.port)
+        self._server = await asyncio.start_server(
+            self.cmd_loop, host="127.0.0.1", port=self.port
+        )
 
     async def stop(self, timeout=5):
         """Stop the TCP/IP server.
@@ -204,14 +254,20 @@ class MockDomeController:
                     cmd = items[-1]
                     if cmd not in self.dispatch_dict:
                         raise KeyError(f"Unsupported command {cmd}")
-                    has_data, func = self.dispatch_dict[cmd]
-                    desired_len = 2 if has_data else 1
-                    if len(items) != desired_len:
-                        raise RuntimeError(f"{line} split into {len(items)} pieces; expected {desired_len}")
-                    if has_data:
-                        outputs = func(items[0])
+                    if cmd == self.fail_command:
+                        self.fail_command = None
+                        outputs = [f"Command {cmd} failed by request"]
                     else:
-                        outputs = func()
+                        has_data, func = self.dispatch_dict[cmd]
+                        desired_len = 2 if has_data else 1
+                        if len(items) != desired_len:
+                            raise RuntimeError(
+                                f"{line} split into {len(items)} pieces; expected {desired_len}"
+                            )
+                        if has_data:
+                            outputs = func(items[0])
+                        else:
+                            outputs = func()
                     if outputs:
                         for msg in outputs:
                             writer.write(f"{msg}\n".encode())
@@ -273,14 +329,17 @@ class MockDomeController:
         """Create short status as a list of strings."""
         move_code = 0
         outputs = []
-        for door, name, closing_code in ((Door.Main, "MAIN", 4), (Door.Dropout, "DROP", 16)):
+        for door, name, closing_code in (
+            (Door.Main, "MAIN", 4),
+            (Door.Dropout, "DROP", 16),
+        ):
             actuator = self.door_actuators[door]
             current_position = actuator.current_position
             if actuator.moving:
                 if actuator.direction < 0:
                     move_code += closing_code
                 else:
-                    move_code += 2*closing_code
+                    move_code += 2 * closing_code
             state_str = "AJAR"
             if current_position == 0:
                 state_str = "CLOSED"
@@ -319,27 +378,28 @@ class MockDomeController:
 
     def do_full_status(self):
         """Create full status as a list of strings."""
+        az_encoder_counts = int(self.home_az.deg * self.encoder_counts_per_360 / 360)
         outputs = self.do_short_status()
         outputs.append(f"Emergency Stop Active: {1 if self.estop_active else 0}")
         outputs.append(f"Top Comm Link OK:    {1 if self.scb_link_ok else 0}")
-        outputs.append(f"Home Azimuth: {self.home_az.deg:05.2f}")
-        outputs.append(f"High Speed (degrees): {self.az_vel:05.2f}")
-        outputs.append("Coast (degrees): 0.20")
-        outputs.append("Tolerance (degrees): 1.00")
-        outputs.append("Encoder Counts per 360: 490496")
-        outputs.append("Encoder Counts:   1485289")
-        outputs.append(f"Last Azimuth GoTo:   {self.az_actuator.end_position:05.2f}")
-        outputs.append("Azimuth Move Timeout (secs): 120")
-        outputs.append(f"Rain-Snow enabled:  {1 if self.rain_enabled else 0}")
-        outputs.append(f"Cloud Sensor enabled: {1 if self.clouds_enabled else 0}")
-        outputs.append("Watchdog Reset Time: 600")
-        outputs.append("Dropout Timer: 100")
-        outputs.append("Reverse Delay: 2")
-        outputs.append("Main Door Encoder Closed: 1856")
-        outputs.append("Main Door Encoder Opened: 456540")
-        outputs.append("Dropout Encoder Closed: 7156")
-        outputs.append("Dropout Encoder Opened: 10321")
-        outputs.append("Door Move Timeout (secs): 360")
+        outputs.append(f"Home Azimuth: {self.home_az.deg:5.2f}")
+        outputs.append(f"High Speed (degrees): {self.high_speed.deg:5.2f}")
+        outputs.append(f"Coast (degrees): {self.coast.deg:0.2f}")
+        outputs.append(f"Tolerance (degrees): {self.tolerance.deg:0.2f}")
+        outputs.append(f"Encoder Counts per 360: {self.encoder_counts_per_360:d}")
+        outputs.append(f"Encoder Counts:  {az_encoder_counts:d}")
+        outputs.append(f"Last Azimuth GoTo: {self.az_actuator.end_position:05.2f}")
+        outputs.append(f"Azimuth Move Timeout (secs): {self.az_move_timeout}")
+        outputs.append(f"Rain-Snow enabled:  {1 if self.rain_sensor_enabled else 0}")
+        outputs.append(f"Cloud Sensor enabled: {1 if self.cloud_sensor_enabled else 0}")
+        outputs.append(f"Watchdog Reset Time: {self.watchdog_reset_time}")
+        outputs.append(f"Dropout Timer: {self.dropout_timer}")
+        outputs.append(f"Reverse Delay: {self.reverse_delay}")
+        outputs.append(f"Main Door Encoder Closed: {self.main_door_encoder_closed:d}")
+        outputs.append(f"Main Door Encoder Opened: {self.main_door_encoder_opened:d}")
+        outputs.append(f"Dropout Encoder Closed: {self.dropout_door_encoder_closed:d}")
+        outputs.append(f"Dropout Encoder Opened: {self.dropout_door_encoder_opened:d}")
+        outputs.append(f"Door Move Timeout (secs): {self.door_move_timeout}")
         return outputs
 
     def do_stop(self):

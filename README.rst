@@ -2,20 +2,21 @@
 ts_ATDome
 #########
 
-``ts_ATDome`` is an LSST Telescope and Site package that implements the auxiliary telescope dome (ATDome) controller.
+``ts_ATDome`` is a Commandable SAL Component (CSC) to control the dome for the auxiliary telescope at the Vera C. Rubin Observatory.
 
-The primary classes are:
+`Documentation <https://ts-atdome.lsst.io>`_
 
-* ``ATDomeCsc``: controller for the auxiliary telescope dome.
-* ``MockDomeController``:  simulator for the auxiliary telescope dome TCP/IP interface.
-
-The package is compatible with LSST DM's ``scons`` build system and ``eups`` package management system.
-Assuming you have the basic LSST DM stack installed you can do the following, from within the package directory:
+The package is compatible with Vera Rubin LSST DM's ``scons`` build system, and the `eups <https://github.com/RobertLuptonTheGood/eups>`_ package management system.
+Assuming you have the basic DM stack installed you can do the following, from within the package directory:
 
 * ``setup -r .`` to setup the package and dependencies.
 * ``scons`` to build the package and run unit tests.
 * ``scons install declare`` to install the package and declare it to eups.
 * ``package-docs build`` to build the documentation.
-  This requires ``documenteer``; see `building single package docs`_ for installation instructions.
+  This requires ``documenteer``; see `building single package docs <https://developer.lsst.io/stack/building-single-package-docs.html>`_ for installation instructions.
 
-.. _building single package docs: https://developer.lsst.io/stack/building-single-package-docs.html
+This code is automatically formatted by ``black`` using a git pre-commit hook.
+To enable this:
+
+* Install the ``black`` Python package.
+* Run ``git config core.hooksPath .githooks`` once in this repository.
