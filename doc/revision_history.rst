@@ -14,7 +14,7 @@ Major changes
 * Output additional information, as new fields in the ``settingsAppliedController`` event and ``position`` telemetry, plus new events ``doorEncoderExtremes`` and ``lastAzimuthGoTo``.
   This requires ts_xml 4.8.
 * Improve error handling by rejecting commands if the low level controller returns unexpected data.
-* Rewrite test_csc to use `lsst.ts.salobj.BaseCscTestCase.
+* Rewrite test_csc to use `lsst.ts.salobj.BaseCscTestCase`.
   This requires ts_salobj 5.4.
 * Code formatted by ``black``, with a pre-commit hook to enforce this. See the README file for configuration instructions.
 
