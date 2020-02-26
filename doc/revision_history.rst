@@ -6,10 +6,26 @@
 ts_ATDome Revision History
 ##########################
 
+v1.1.1
+======
+
+Major changes:
+
+* Fix determination of "azimuth in position" by using a tolerance a bit larger than that used by the low-level controller.
+  This margin is controlled by attribute `az_tolerance_margin`.
+* Report ``azimuthEncoderPosition=0`` in the ``position`` telemetry topic, if the value is too large for the schema.
+
+Requires:
+
+* ts_salobj 5.4
+* ts_simactuators 0.1
+* ts_idl
+* IDL file for ATDome from ts_xml 4.8
+
 v1.1.0
 ======
 
-Major changes
+Major changes:
 
 * Output additional information, as new fields in the ``settingsAppliedController`` event and ``position`` telemetry, plus new events ``doorEncoderExtremes`` and ``lastAzimuthGoTo``.
   This requires ts_xml 4.8.
@@ -18,10 +34,8 @@ Major changes
   This requires ts_salobj 5.4.
 * Code formatted by ``black``, with a pre-commit hook to enforce this. See the README file for configuration instructions.
 
-Requirements
-============
+Requires:
 
-* black
 * ts_salobj 5.4
 * ts_simactuators 0.1
 * ts_idl
@@ -32,8 +46,7 @@ v1.0.0
 
 Update for a change to the low-level controller (a minor change to full status output).
 
-Requirements
-============
+Requires:
 
 * ts_salobj 5.2
 * ts_simactuators 0.1
@@ -45,8 +58,7 @@ v0.10.0
 
 Update to use ts_simactuators.
 
-Requirements
-============
+Requires:
 
 * ts_salobj 5.2
 * ts_simactuators 0.1
@@ -58,8 +70,7 @@ v0.9.0
 
 Update for ts_salobj 5.2: rename initial_simulation_mode to simulation_mode.
 
-Requirements
-============
+Requires:
 
 * ts_salobj 5.2
 * ts_idl
@@ -75,8 +86,7 @@ Note that the stop command and any valid shutter move command will cancel and su
 
 Updated the unit tests to use the ``asynctest`` package.
 
-Requirements
-============
+Requires:
 
 * ts_salobj 5
 * ts_idl
@@ -87,7 +97,7 @@ v0.7.0
 
 Make ATDome a non-indexed SAL component.
 
-Requirements:
+Requires:
 
 * ts_salobj 4.3
 * ts_idl
@@ -103,7 +113,8 @@ v0.6.0
 
 Use OpenSplice dds instead of SALPY libraries.
 
-Requirements:
+Requires:
+
 * ts_salobj 4
 * ts_idl
 * IDL file for ATDome from ts_xml 3.9
@@ -114,7 +125,7 @@ v0.5.0
 Make configurable in the standard way.
 The configuration files are in package ``ts_config_attcs``.
 
-Requirements:
+Requires:
 
 * ts_sal 3.9
 * ts_salobj 3.12
@@ -126,7 +137,8 @@ v0.4.0
 Add commanded state events.
 Fixed several issues with the real ATDome TCP/IP interface.
 
-Minimum requirements:
+Requires:
+
 * ts_xml develop rev 865c63d
 * ts_sal 3.8.41
 * ts_salobj 3.9
@@ -136,7 +148,7 @@ v0.3.0
 
 Allow ``run_atdome.py`` to start in simulation mode.
 
-Requirements:
+Requires:
 
 * ts_sal 3.8.41
 * ts_salobj 3.8
@@ -155,7 +167,7 @@ First release of the real ATDome CSC, not just a simulator.
 
 Updated for a major change to the ATDome XML.
 
-Requirements:
+Requires:
 
 * ts_sal 3.8.41
 * ts_salobj 3.8
@@ -166,7 +178,7 @@ v0.1.0
 
 First release of the ATDome simulator.
 
-Requrements:
+Requires:
 
 * ts_sal 3.8.41
 * ts_salobj 3.6
