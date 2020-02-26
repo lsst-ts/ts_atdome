@@ -113,7 +113,13 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.move_code = 0
         self.mock_ctrl = None  # mock controller, or None of not constructed
         self.status_interval = 0.2  # delay between short status commands (sec)
-        self.az_tolerance = Angle(0.2, u.deg)  # tolerance for "in position"
+        # Amount to add to "tolerance" reported by the low-level controller
+        # to set az_tolarance
+        self.az_tolerance_margin = Angle(0.5, u.deg)
+        # Tolerance for "in position"
+        # Set the initial value here, then update from the
+        # "Tolerance" reported in long status.
+        self.az_tolerance = Angle(1.5, u.deg)
         # Task for sleeping in the status loop; cancel this to trigger
         # an immediate status update. Warning: do not cancel status_task
         # because that may be waiting for TCP/IP communication.
@@ -304,8 +310,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
             try:
                 read_bytes = await asyncio.wait_for(
-                    self.reader.readuntil(">".encode()),
-                    timeout=self.config.read_timeout,
+                    self.reader.readuntil(b">"), timeout=self.config.read_timeout
                 )
             except Exception as e:
                 if isinstance(e, asyncio.streams.IncompleteReadError):
@@ -619,6 +624,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         try:
             self.tel_position.set(azimuthEncoderPosition=status.encoder_counts)
         except ValueError:
+            self.log.warning(
+                f"status.encoder_counts={status.encoder_counts} too big for SAL topic!"
+            )
             self.tel_position.set(azimuthEncoderPosition=0)
         self.tel_position.set_put(
             mainDoorOpeningPercentage=status.main_door_pct,
@@ -699,6 +707,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             azimuthMoveTimeout=status.azimuth_move_timeout,
             doorMoveTimeout=status.door_move_timeout,
         )
+
+        self.az_tolerance = status.tolerance + self.az_tolerance_margin
 
     async def wait_for_shutter(self, *, dropout_state, main_state):
         """Wait for the shutter doors to move to a specified position.
@@ -788,8 +798,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         while self.connected:
             try:
                 await self.run_command("+")
-            except Exception as e:
-                self.log.warning(f"Status request failed: {e}")
+            except Exception:
+                self.log.exception(f"Status request failed; status loop continues")
             try:
                 self.status_sleep_task = asyncio.ensure_future(
                     asyncio.sleep(self.status_interval)
