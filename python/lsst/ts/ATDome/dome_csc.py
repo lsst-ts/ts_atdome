@@ -614,11 +614,16 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         """
         status = Status(lines)
 
+        # TODO: DM-23808 the azimuthEncoderPosition isn't big enough.
+        # Once that is fixed, ditch the try/except and set the field normally.
+        try:
+            self.tel_position.set(azimuthEncoderPosition=status.encoder_counts)
+        except ValueError:
+            self.tel_position.set(azimuthEncoderPosition=0)
         self.tel_position.set_put(
             mainDoorOpeningPercentage=status.main_door_pct,
             dropoutDoorOpeningPercentage=status.dropout_door_pct,
             azimuthPosition=status.az_pos.deg,
-            azimuthEncoderPosition=status.encoder_counts,
         )
 
         move_code = status.move_code
