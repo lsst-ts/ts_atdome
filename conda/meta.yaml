@@ -1,0 +1,57 @@
+{% set data= load_setup_py_data() %}
+package:
+  name: ts-atdome
+  version: {{ data.get('version') }}
+
+source:
+  path: ../
+
+build:
+  script: python -m pip install --no-deps --ignore-installed .
+  script_env:
+    - PATH
+    - PYTHONPATH
+    - LD_LIBRARY_PATH
+    - OSPL_HOME
+    - PYTHON_BUILD_VERSION
+    - PYTHON_BUILD_LOCATION
+    - TS_CONFIG_ATTCS_DIR
+
+test:
+  requires:
+    - pytest
+    - pytest-flake8
+    - pytest-cov
+    - asynctest
+    - numpy
+    - astropy
+    - jsonschema
+    - pyyaml
+    - boto3
+    - moto
+    - ts-simactuators
+    - ts-dds
+    - ts-idl
+    - ts-salobj
+  source_files:
+    - python
+    - bin
+    - tests
+    - schema
+    - setup.cfg
+  commands:
+    - py.test
+
+requirements:
+  host:
+    - python
+    - pip
+    - setuptools_scm
+    - setuptools
+    - pytest-runner
+  run:
+    - python
+    - setuptools
+    - setuptools_scm
+    - ts-salobj
+    - ts-simactuators
