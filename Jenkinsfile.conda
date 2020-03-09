@@ -23,6 +23,7 @@ pipeline {
                     sh """
                     docker run --name ${container_name} -di --rm \
                         --env TS_CONFIG_ATTCS_DIR=/home/saluser/ts_config_attcs \
+                        --env LSST_DDS_DOMAIN=citest \
                         -v ${WORKSPACE}:/home/saluser/source ${dockerImageName}
                     """
                 }

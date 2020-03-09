@@ -16,6 +16,7 @@ build:
     - PYTHON_BUILD_VERSION
     - PYTHON_BUILD_LOCATION
     - TS_CONFIG_ATTCS_DIR
+    - LSST_DDS_DOMAIN
 
 test:
   requires:
