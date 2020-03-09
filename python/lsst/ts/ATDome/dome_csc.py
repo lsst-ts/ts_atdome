@@ -801,6 +801,16 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             except Exception:
                 self.log.exception(f"Status request failed; status loop continues")
             try:
+                last_goto = self.evt_lastAzimuthGoTo.data.position
+                current_az = self.tel_position.data.dropoutDoorOpeningPercentage
+                if abs(last_goto -
+                       current_az) > self.az_tolerance.deg:
+                    self.log.debug(f"Reset dome demand position: {last_goto:0.3f}")
+                    await self.run_command(f"{last_goto:0.3f} MV")
+            except Exception as e:
+                self.log.exception(e)
+
+            try:
                 self.status_sleep_task = asyncio.ensure_future(
                     asyncio.sleep(self.status_interval)
                 )

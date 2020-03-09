@@ -1,0 +1,53 @@
+pipeline {
+    agent any
+    environment {
+        package = "atdome"
+        package_version = sh(returnStdout: true, script: "git describe --tags --always --dirty").trim()
+        dockerImageName = "lsstts/conda_package_builder:latest"
+        container_name = "salobj_${BUILD_ID}_${JENKINS_NODE_COOKIE}"
+    }
+
+    stages {
+        stage("Pull Docker Image") {
+            steps {
+                script {
+                sh """
+                docker pull ${dockerImageName}
+                """
+                }
+            }
+        }
+        stage("Create ATDome Conda package") {
+            steps {
+                script {
+                    sh """
+                    docker run --name ${container_name} -di --rm --env TS_VERSION=${package_version} \
+                        -v ${WORKSPACE}/conda:/home/saluser/conda ${dockerImageName}
+                    docker exec ${container_name} sh -c "cd ~/conda && source ~/miniconda3/bin/activate && conda build ."
+                    """
+                }
+            }
+        }
+        stage("Push ATDome Conda package") {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'CondaForge', passwordVariable: 'anaconda_pass', usernameVariable: 'anaconda_user')]) {
+                    script {
+                        sh """
+                        docker exec ${container_name} sh -c "source ~/miniconda3/bin/activate && \
+                            anaconda login --user ${anaconda_user} --password ${anaconda_pass} && \
+                            anaconda upload -u lsstts --force \
+                            ~/miniconda3/conda-bld/linux-64/ts-${package}-${package_version}-py37_0.tar.bz2"
+                        """
+                    }
+                }
+            }
+        }
+    }
+    post {
+        cleanup {
+            sh """
+            docker stop ${container_name}
+            """
+        }
+    }
+}
