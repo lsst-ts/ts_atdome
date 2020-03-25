@@ -123,6 +123,23 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 readTimeout=self.csc.config.read_timeout,
             )
 
+            # This az_tolerance value after full status has been received
+            standard_az_tolerance = self.csc.az_tolerance
+            self.assertAlmostEqual(
+                standard_az_tolerance.deg,
+                (self.csc.mock_ctrl.tolerance + self.csc.az_tolerance_margin).deg,
+            )
+
+            # Increase the Azimuth tolerance in the mock controller and check
+            # that the tolerance in the CSC is increased by the same amount.
+            delta_tolerance = Angle(4.0, u.deg)
+            self.csc.mock_ctrl.tolerance += delta_tolerance
+            await self.remote.tel_position.next(flush=True)
+            await self.remote.tel_position.next(flush=True)
+            self.assertAlmostEqual(
+                self.csc.az_tolerance.deg, (standard_az_tolerance + delta_tolerance).deg
+            )
+
     async def test_default_config_dir(self):
         async with self.make_csc(
             initial_state=salobj.State.STANDBY, config_dir=None, simulation_mode=1

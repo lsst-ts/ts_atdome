@@ -48,7 +48,7 @@ Contributing
 ============
 
 ``lsst.ts.ATDome`` is developed at https://github.com/lsst-ts/ts_ATDome.
-You can find Jira issues for this module under the `ts_ATDome <https://jira.lsstcorp.org/issues/?jql=project%20%3D%20DM%20AND%20component%20%3D%20ts_ATDome>`_ component.
+You can find Jira issues for this module using `labels=ts_ATDome <https://jira.lsstcorp.org/issues/?jql=project%20%3D%20DM%20AND%20labels%20%20%3D%20ts_ATDome>`_.
 
 .. _lsst.ts.ATDome-pyapi:
 
