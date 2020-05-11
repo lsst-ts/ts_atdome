@@ -69,9 +69,10 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         the default.
     simulation_mode : `int` (optional)
         Simulation mode.
-    mock_port : `int` (optional)
+    mock_port : `int` or `None` (optional)
         Port for mock controller TCP/IP interface. If `None` then use the
-        port specified by the configuration. Only used in simulation mode.
+        port specified by the configuration. If 0 then pick an available port.
+        Only used in simulation mode.
 
     Raises
     ------
