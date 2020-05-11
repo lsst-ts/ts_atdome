@@ -86,7 +86,7 @@ class MockDomeController:
     Parameters
     ----------
     port : int
-        TCP/IP port
+        TCP/IP port. If 0 then pick an available port.
     door_time : `float`
         Time to open or close either door (sec)
     az_vel : `float`
@@ -128,6 +128,8 @@ class MockDomeController:
         home_az_overshoot=1,
         home_az_vel=1,
     ):
+        # If port == 0 then this will be updated to the actual port
+        # in `start`, right after the TCP/IP server is created.
         self.port = port
         self.door_time = door_time
         self.az_vel = Angle(az_vel, u.deg)
@@ -210,6 +212,8 @@ class MockDomeController:
         self._server = await asyncio.start_server(
             self.cmd_loop, host="127.0.0.1", port=self.port
         )
+        if self.port == 0:
+            self.port = self._server.sockets[0].getsockname()[1]
 
     async def stop(self, timeout=5):
         """Stop the TCP/IP server.
