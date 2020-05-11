@@ -178,7 +178,7 @@ class MockDomeController:
 
         self.last_rot_right = None
         self.log = logging.getLogger("MockDomeController")
-        self._server = None
+        self.server = None
 
         # Dict of command: (has_argument, function).
         # The function is called with:
@@ -209,20 +209,20 @@ class MockDomeController:
 
         Set start_task done and start the command loop.
         """
-        self._server = await asyncio.start_server(
+        self.server = await asyncio.start_server(
             self.cmd_loop, host="127.0.0.1", port=self.port
         )
         if self.port == 0:
-            self.port = self._server.sockets[0].getsockname()[1]
+            self.port = self.server.sockets[0].getsockname()[1]
 
     async def stop(self, timeout=5):
         """Stop the TCP/IP server.
         """
-        if self._server is None:
+        if self.server is None:
             return
 
-        server = self._server
-        self._server = None
+        server = self.server
+        self.server = None
         server.close()
         await asyncio.wait_for(server.wait_closed(), timeout=5)
 
