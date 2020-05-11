@@ -6,6 +6,23 @@
 ts_ATDome Revision History
 ##########################
 
+v1.1.2
+======
+
+Changes:
+
+* Add a test that the code is formatted with ``black``.
+  This test uses a function that was added to ts_salobj 5.11.
+* Use mock_port=0 with the `ATDomeCsc` and port=0 with the `MockDomeController` constructor to mean "pick an available port".
+  This eliminates the risk that a unit test can fail due to trying to use a TCP/IP port that is already in use.
+
+Requires:
+
+* ts_salobj 5.11
+* ts_simactuators 0.1
+* ts_idl
+* IDL file for ATDome from ts_xml 4.8
+
 v1.1.1
 ======
 
