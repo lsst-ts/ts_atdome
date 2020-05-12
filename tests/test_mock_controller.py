@@ -26,10 +26,7 @@ import asynctest
 from astropy.coordinates import Angle
 import astropy.units as u
 
-from lsst.ts import salobj
 from lsst.ts import ATDome
-
-port_generator = salobj.index_generator(imin=3100)
 
 
 class MockTestCase(asynctest.TestCase):
@@ -37,13 +34,12 @@ class MockTestCase(asynctest.TestCase):
     """
 
     async def setUp(self):
-        self.port = next(port_generator)
         self.ctrl = None
         self.writer = None
 
-        self.ctrl = ATDome.MockDomeController(port=self.port)
+        self.ctrl = ATDome.MockDomeController(port=0)
         await asyncio.wait_for(self.ctrl.start(), 5)
-        rw_coro = asyncio.open_connection(host="127.0.0.1", port=self.port)
+        rw_coro = asyncio.open_connection(host="127.0.0.1", port=self.ctrl.port)
         self.reader, self.writer = await asyncio.wait_for(rw_coro, timeout=5)
         read_bytes = await asyncio.wait_for(
             self.reader.readuntil(">".encode()), timeout=5

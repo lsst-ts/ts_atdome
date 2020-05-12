@@ -45,8 +45,6 @@ DOOR_TIMEOUT = 4  # time limit for shutter door commands (sec)
 LONG_TIMEOUT = 20  # timeout for starting SAL components (sec)
 TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
 
-port_generator = salobj.index_generator(imin=3200)
-
 
 class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
     def basic_make_csc(self, initial_state, config_dir, simulation_mode):
@@ -54,7 +52,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             initial_state=initial_state,
             config_dir=config_dir,
             simulation_mode=simulation_mode,
-            mock_port=next(port_generator),
+            mock_port=0,
         )
 
     async def test_initial_info(self):
