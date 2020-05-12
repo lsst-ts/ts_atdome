@@ -163,7 +163,7 @@ class MockDomeController:
             for enum in Door
         )
 
-        self._homing_task = None
+        self._homing_task = salobj.make_done_future()
         self._homing = False
         self.rain_sensor_enabled = True
         self.rain_detected = False
@@ -229,15 +229,7 @@ class MockDomeController:
     @property
     def homing(self):
         """Is azimuth being homed?"""
-        return self._homing_task is not None and not self._homing_task.done()
-
-    def cancel_homing(self):
-        """Cancel azimuth homing.
-
-        A no-op if azimuth is not being homed.
-        """
-        if self.homing:
-            self._homing_task.cancel()
+        return not self._homing_task.done()
 
     async def cmd_loop(self, reader, writer):
         """Execute commands and output replies."""
@@ -313,7 +305,7 @@ class MockDomeController:
     def do_home(self):
         """Rotate azimuth to the home position.
         """
-        self.cancel_homing()
+        self._homing_task.cancel()
         self._homing_task = asyncio.ensure_future(self.implement_home())
 
     def do_set_cmd_az(self, data):
