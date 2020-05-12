@@ -86,7 +86,7 @@ class MockDomeController:
     Parameters
     ----------
     port : int
-        TCP/IP port
+        TCP/IP port. If 0 then pick an available port.
     door_time : `float`
         Time to open or close either door (sec)
     az_vel : `float`
@@ -128,6 +128,8 @@ class MockDomeController:
         home_az_overshoot=1,
         home_az_vel=1,
     ):
+        # If port == 0 then this will be updated to the actual port
+        # in `start`, right after the TCP/IP server is created.
         self.port = port
         self.door_time = door_time
         self.az_vel = Angle(az_vel, u.deg)
@@ -161,7 +163,7 @@ class MockDomeController:
             for enum in Door
         )
 
-        self._homing_task = None
+        self._homing_task = salobj.make_done_future()
         self._homing = False
         self.rain_sensor_enabled = True
         self.rain_detected = False
@@ -176,7 +178,7 @@ class MockDomeController:
 
         self.last_rot_right = None
         self.log = logging.getLogger("MockDomeController")
-        self._server = None
+        self.server = None
 
         # Dict of command: (has_argument, function).
         # The function is called with:
@@ -207,33 +209,27 @@ class MockDomeController:
 
         Set start_task done and start the command loop.
         """
-        self._server = await asyncio.start_server(
+        self.server = await asyncio.start_server(
             self.cmd_loop, host="127.0.0.1", port=self.port
         )
+        if self.port == 0:
+            self.port = self.server.sockets[0].getsockname()[1]
 
     async def stop(self, timeout=5):
         """Stop the TCP/IP server.
         """
-        if self._server is None:
+        if self.server is None:
             return
 
-        server = self._server
-        self._server = None
+        server = self.server
+        self.server = None
         server.close()
         await asyncio.wait_for(server.wait_closed(), timeout=5)
 
     @property
     def homing(self):
         """Is azimuth being homed?"""
-        return self._homing_task is not None and not self._homing_task.done()
-
-    def cancel_homing(self):
-        """Cancel azimuth homing.
-
-        A no-op if azimuth is not being homed.
-        """
-        if self.homing:
-            self._homing_task.cancel()
+        return not self._homing_task.done()
 
     async def cmd_loop(self, reader, writer):
         """Execute commands and output replies."""
@@ -309,7 +305,7 @@ class MockDomeController:
     def do_home(self):
         """Rotate azimuth to the home position.
         """
-        self.cancel_homing()
+        self._homing_task.cancel()
         self._homing_task = asyncio.ensure_future(self.implement_home())
 
     def do_set_cmd_az(self, data):
