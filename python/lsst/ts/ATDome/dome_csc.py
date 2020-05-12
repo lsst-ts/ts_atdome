@@ -738,7 +738,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 f"main_state={main_state!r}; must be one of {allowed_values}"
             )
         if dropout_state is None and main_state is None:
-            raise ValueError(f"dropout_state and main_state cannot both be None")
+            raise ValueError("dropout_state and main_state cannot both be None")
         self.shutter_task.cancel()
         self.desired_dropout_shutter_state = dropout_state
         self.desired_main_shutter_state = main_state
@@ -800,7 +800,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             try:
                 await self.run_command("+")
             except Exception:
-                self.log.exception(f"Status request failed; status loop continues")
+                self.log.exception("Status request failed; status loop continues")
             try:
                 self.status_sleep_task = asyncio.ensure_future(
                     asyncio.sleep(self.status_interval)
