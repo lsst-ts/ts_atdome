@@ -1,10 +1,10 @@
 .. py:currentmodule:: lsst.ts.ATDome
 
-.. _lsst.ts.ATDome.revision_history:
+.. _lsst.ts.ATDome.version_history:
 
-################
-Revision History
-################
+###############
+Version History
+###############
 
 v1.1.3
 ======
