@@ -1,10 +1,24 @@
 .. py:currentmodule:: lsst.ts.ATDome
 
-.. _lsst.ts.ATDome.revision_history:
+.. _lsst.ts.ATDome.version_history:
 
-##########################
-ts_ATDome Revision History
-##########################
+###############
+Version History
+###############
+
+v1.1.3
+======
+
+Changes:
+
+* Remove ``sudo: false`` from ``.travis.yml``.
+
+Requires:
+
+* ts_salobj 5.11
+* ts_simactuators 0.1
+* ts_idl
+* IDL file for ATDome from ts_xml 4.8
 
 v1.1.2
 ======
