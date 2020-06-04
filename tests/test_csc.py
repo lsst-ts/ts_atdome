@@ -28,9 +28,6 @@ import unittest
 import asynctest
 import yaml
 
-from astropy.coordinates import Angle
-import astropy.units as u
-
 from lsst.ts import salobj
 from lsst.ts.idl.enums.ATDome import (
     AzimuthCommandedState,
@@ -83,10 +80,10 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 autoShutdownEnabled=mock_ctrl.auto_shutdown_enabled,
                 encoderCountsPer360=mock_ctrl.encoder_counts_per_360,
             )
-            self.assertAlmostEqual(ctrllr_settings.tolerance, mock_ctrl.tolerance.deg)
-            self.assertAlmostEqual(ctrllr_settings.homeAzimuth, mock_ctrl.home_az.deg)
+            self.assertAlmostEqual(ctrllr_settings.tolerance, mock_ctrl.tolerance)
+            self.assertAlmostEqual(ctrllr_settings.homeAzimuth, mock_ctrl.home_az)
             self.assertAlmostEqual(
-                ctrllr_settings.highSpeedDistance, mock_ctrl.high_speed.deg
+                ctrllr_settings.highSpeedDistance, mock_ctrl.high_speed
             )
             self.assertAlmostEqual(
                 ctrllr_settings.watchdogTimer, mock_ctrl.watchdog_reset_time
@@ -97,7 +94,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             self.assertAlmostEqual(
                 ctrllr_settings.reversalDelay, mock_ctrl.reverse_delay
             )
-            self.assertAlmostEqual(ctrllr_settings.coast, mock_ctrl.coast.deg)
+            self.assertAlmostEqual(ctrllr_settings.coast, mock_ctrl.coast)
             self.assertAlmostEqual(
                 ctrllr_settings.azimuthMoveTimeout, mock_ctrl.az_move_timeout
             )
@@ -124,18 +121,18 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             # This az_tolerance value after full status has been received
             standard_az_tolerance = self.csc.az_tolerance
             self.assertAlmostEqual(
-                standard_az_tolerance.deg,
-                (self.csc.mock_ctrl.tolerance + self.csc.az_tolerance_margin).deg,
+                standard_az_tolerance,
+                self.csc.mock_ctrl.tolerance + self.csc.az_tolerance_margin,
             )
 
             # Increase the Azimuth tolerance in the mock controller and check
             # that the tolerance in the CSC is increased by the same amount.
-            delta_tolerance = Angle(4.0, u.deg)
+            delta_tolerance = 4.0
             self.csc.mock_ctrl.tolerance += delta_tolerance
             await self.remote.tel_position.next(flush=True)
             await self.remote.tel_position.next(flush=True)
             self.assertAlmostEqual(
-                self.csc.az_tolerance.deg, (standard_az_tolerance + delta_tolerance).deg
+                self.csc.az_tolerance, standard_az_tolerance + delta_tolerance
             )
 
     async def test_default_config_dir(self):
@@ -207,8 +204,8 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             await self.check_initial_az_events()
 
             # set home azimuth near current position so homing goes quickly
-            curr_az = self.csc.mock_ctrl.az_actuator.current_position
-            home_azimuth = (curr_az - 2 * u.deg).wrap_at(Angle(360, u.deg))
+            curr_az = self.csc.mock_ctrl.az_actuator.position()
+            home_azimuth = salobj.angle_wrap_nonnegative(curr_az - 2).deg
             self.csc.mock_ctrl.home_az = home_azimuth
 
             await self.remote.cmd_homeAzimuth.start(timeout=STD_TIMEOUT)
@@ -229,7 +226,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             position = await self.assert_next_sample(
                 topic=self.remote.tel_position, flush=True
             )
-            self.assertGreater(position.azimuthPosition, home_azimuth.deg)
+            self.assertGreater(position.azimuthPosition, home_azimuth)
 
             # check that moveAzimuth is disallowed while homing
             with salobj.assertRaisesAckError():
@@ -248,8 +245,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 homing=True,
             )
             self.assertAlmostEqual(
-                self.csc.mock_ctrl.az_actuator.speed.deg,
-                self.csc.mock_ctrl.home_az_vel.deg,
+                self.csc.mock_ctrl.az_actuator.speed, self.csc.mock_ctrl.home_az_vel,
             )
 
             # wait for the slow CW homing move to finish
@@ -259,12 +255,12 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 homing=False,
             )
             self.assertAlmostEqual(
-                self.csc.mock_ctrl.az_actuator.speed.deg, self.csc.mock_ctrl.az_vel.deg
+                self.csc.mock_ctrl.az_actuator.speed, self.csc.mock_ctrl.az_vel
             )
             position = await self.assert_next_sample(
                 topic=self.remote.tel_position, flush=True
             )
-            self.assertAlmostEqual(position.azimuthPosition, home_azimuth.deg)
+            self.assertAlmostEqual(position.azimuthPosition, home_azimuth)
 
     async def test_move_az(self):
         async with self.make_csc(
