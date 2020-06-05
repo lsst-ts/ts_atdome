@@ -14,6 +14,12 @@ Changes:
 * Updated for ts_simactuators 2
 * Removed all use of astropy Angle.
 
+Requires:
+
+* ts_salobj 5.15
+* ts_simactuators 2
+* ts_idl
+* IDL file for ATDome from ts_xml 4.8
 
 v1.1.3
 ======
