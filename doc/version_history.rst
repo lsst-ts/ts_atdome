@@ -6,6 +6,15 @@
 Version History
 ###############
 
+v1.2.0
+======
+
+Changes:
+
+* Updated for ts_simactuators 2
+* Removed all use of astropy Angle.
+
+
 v1.1.3
 ======
 

@@ -22,11 +22,6 @@ __all__ = ["Status"]
 
 import re
 
-from astropy.coordinates import Angle
-import astropy.units as u
-
-MIDDLE_WRAP_ANGLE = Angle(180, u.deg)
-
 
 def parse(regex, line):
     """Parse a line of status.
@@ -76,9 +71,7 @@ class Status:
         self.auto_shutdown_enabled = auto_shutdown_match.group(1) == "ON"
         self.sensor_code = int(auto_shutdown_match.group(2))
 
-        self.az_pos = Angle(
-            float(parse_get(r"(?:POSN|HOME) +(\d*\.?\d+)", lines[3])), u.deg
-        )
+        self.az_pos = float(parse_get(r"(?:POSN|HOME) +(\d*\.?\d+)", lines[3]))
 
         self.move_code = int(parse_get(r"(?:RL|RR|--) +(\d+)", lines[4]))
 
@@ -88,19 +81,13 @@ class Status:
 
         self.scb_link_ok = bool(int(parse_get(r"Top Comm Link OK: +(\d)", lines[6])))
 
-        self.home_azimuth = Angle(
-            float(parse_get(r"Home Azimuth: +(\d*\.?\d+)", lines[7])), u.deg
-        )
+        self.home_azimuth = float(parse_get(r"Home Azimuth: +(\d*\.?\d+)", lines[7]))
 
-        self.high_speed = Angle(
-            float(parse_get(r"High Speed.+: +(\d*\.?\d+)", lines[8])), u.deg
-        )
+        self.high_speed = float(parse_get(r"High Speed.+: +(\d*\.?\d+)", lines[8]))
 
-        self.coast = Angle(float(parse_get(r"Coast.+: +(\d*\.?\d+)", lines[9])), u.deg)
+        self.coast = float(parse_get(r"Coast.+: +(\d*\.?\d+)", lines[9]))
 
-        self.tolerance = Angle(
-            float(parse_get(r"Tolerance.+: +(\d*\.?\d+)", lines[10])), u.deg
-        )
+        self.tolerance = float(parse_get(r"Tolerance.+: +(\d*\.?\d+)", lines[10]))
 
         self.encoder_counts_per_360 = int(
             parse_get(r"Encoder Counts per 360: +(\d+)", lines[11])
