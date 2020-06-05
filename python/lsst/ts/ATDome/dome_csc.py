@@ -25,9 +25,6 @@ import enum
 import math
 import pathlib
 
-from astropy.coordinates import Angle
-import astropy.units as u
-
 from lsst.ts import salobj
 from lsst.ts.idl.enums.ATDome import (
     AzimuthCommandedState,
@@ -115,12 +112,12 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.mock_ctrl = None  # mock controller, or None of not constructed
         self.status_interval = 0.2  # delay between short status commands (sec)
         # Amount to add to "tolerance" reported by the low-level controller
-        # to set az_tolarance
-        self.az_tolerance_margin = Angle(0.5, u.deg)
-        # Tolerance for "in position"
+        # to set az_tolarance (deg).
+        self.az_tolerance_margin = 0.5
+        # Tolerance for "in position" (deg).
         # Set the initial value here, then update from the
         # "Tolerance" reported in long status.
-        self.az_tolerance = Angle(1.5, u.deg)
+        self.az_tolerance = 1.5
         # Task for sleeping in the status loop; cancel this to trigger
         # an immediate status update. Warning: do not cancel status_task
         # because that may be waiting for TCP/IP communication.
@@ -632,7 +629,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.tel_position.set_put(
             mainDoorOpeningPercentage=status.main_door_pct,
             dropoutDoorOpeningPercentage=status.dropout_door_pct,
-            azimuthPosition=status.az_pos.deg,
+            azimuthPosition=status.az_pos,
         )
 
         move_code = status.move_code
@@ -696,14 +693,14 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.evt_settingsAppliedDomeController.set_put(
             rainSensorEnabled=status.rain_sensor_enabled,
             cloudSensorEnabled=status.cloud_sensor_enabled,
-            tolerance=status.tolerance.deg,
-            homeAzimuth=status.home_azimuth.deg,
-            highSpeedDistance=status.high_speed.deg,
+            tolerance=status.tolerance,
+            homeAzimuth=status.home_azimuth,
+            highSpeedDistance=status.high_speed,
             watchdogTimer=status.watchdog_timer,
             dropoutTimer=status.dropout_timer,
             reversalDelay=status.reversal_delay,
             autoShutdownEnabled=status.auto_shutdown_enabled,
-            coast=status.coast.deg,
+            coast=status.coast,
             encoderCountsPer360=status.encoder_counts_per_360,
             azimuthMoveTimeout=status.azimuth_move_timeout,
             doorMoveTimeout=status.door_move_timeout,

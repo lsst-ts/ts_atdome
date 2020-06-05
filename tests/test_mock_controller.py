@@ -23,9 +23,7 @@ import unittest
 
 import asynctest
 
-from astropy.coordinates import Angle
-import astropy.units as u
-
+from lsst.ts import salobj
 from lsst.ts import ATDome
 
 
@@ -76,16 +74,16 @@ class MockTestCase(asynctest.TestCase):
         self.assertEqual(status.dropout_door_pct, 0)
         self.assertEqual(status.auto_shutdown_enabled, self.ctrl.auto_shutdown_enabled)
         self.assertEqual(status.sensor_code, 0)
-        self.assertAlmostEqual(status.az_pos.deg, 0)
+        self.assertAlmostEqual(status.az_pos, 0)
         self.assertEqual(status.move_code, 0)
         self.assertEqual(status.estop_active, self.ctrl.estop_active)
         self.assertEqual(status.scb_link_ok, self.ctrl.scb_link_ok)
         self.assertEqual(status.rain_sensor_enabled, self.ctrl.rain_sensor_enabled)
         self.assertEqual(status.cloud_sensor_enabled, self.ctrl.cloud_sensor_enabled)
-        self.assertAlmostEqual(status.coast.deg, self.ctrl.coast.deg)
-        self.assertAlmostEqual(status.tolerance.deg, self.ctrl.tolerance.deg)
-        self.assertAlmostEqual(status.home_azimuth.deg, self.ctrl.home_az.deg)
-        self.assertAlmostEqual(status.high_speed.deg, self.ctrl.high_speed.deg)
+        self.assertAlmostEqual(status.coast, self.ctrl.coast)
+        self.assertAlmostEqual(status.tolerance, self.ctrl.tolerance)
+        self.assertAlmostEqual(status.home_azimuth, self.ctrl.home_az)
+        self.assertAlmostEqual(status.high_speed, self.ctrl.high_speed)
         self.assertAlmostEqual(status.watchdog_timer, self.ctrl.watchdog_reset_time)
         self.assertAlmostEqual(status.reversal_delay, self.ctrl.reverse_delay)
         self.assertEqual(
@@ -117,28 +115,28 @@ class MockTestCase(asynctest.TestCase):
     async def test_move_az(self):
         daz = -3
         az = 360 + daz
-        est_duration = abs(daz / self.ctrl.az_vel.deg)
+        est_duration = abs(daz / self.ctrl.az_vel)
         reply_lines = await self.send_cmd(f"{az:0.2f} MV")
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
         reply_lines = await self.send_cmd("+")
         status = ATDome.Status(reply_lines)
-        self.assertLess(status.az_pos.deg, 360)
-        self.assertGreater(status.az_pos.deg, 357)
+        self.assertLess(status.az_pos, 360)
+        self.assertGreater(status.az_pos, 357)
         self.assertEqual(status.move_code, 2)
 
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
         reply_lines = await self.send_cmd("+")
         status = ATDome.Status(reply_lines)
-        self.assertAlmostEqual(status.az_pos.deg, 357)
+        self.assertAlmostEqual(status.az_pos, 357)
         self.assertEqual(status.move_code, 0)
 
     async def test_home_az(self):
         daz = -2
-        est_ccw_duration = abs(daz / self.ctrl.az_vel.deg)
-        curr_az = self.ctrl.az_actuator.current_position
-        home_azimuth = (curr_az - 2 * u.deg).wrap_at(Angle(360, u.deg))
+        est_ccw_duration = abs(daz / self.ctrl.az_vel)
+        curr_az = self.ctrl.az_actuator.position(salobj.current_tai())
+        home_azimuth = salobj.angle_wrap_nonnegative(curr_az - 2).deg
         self.ctrl.home_az = home_azimuth
 
         reply_lines = await self.send_cmd("HM")
@@ -149,25 +147,25 @@ class MockTestCase(asynctest.TestCase):
         reply_lines = await self.send_cmd("+")
         status = ATDome.Status(reply_lines)
         self.assertEqual(status.move_code, 2 + 64)
-        self.assertAlmostEqual(self.ctrl.az_actuator.speed.deg, self.ctrl.az_vel.deg)
+        self.assertAlmostEqual(self.ctrl.az_actuator.speed, self.ctrl.az_vel)
 
         # sleep until halfway through CW motion and check status
-        await asyncio.sleep(self.ctrl.az_actuator.remaining_time + est_ccw_duration / 2)
+        await asyncio.sleep(
+            self.ctrl.az_actuator.remaining_time() + est_ccw_duration / 2
+        )
         reply_lines = await self.send_cmd("+")
         status = ATDome.Status(reply_lines)
         self.assertEqual(status.move_code, 1 + 64)
-        self.assertAlmostEqual(
-            self.ctrl.az_actuator.speed.deg, self.ctrl.home_az_vel.deg
-        )
+        self.assertAlmostEqual(self.ctrl.az_actuator.speed, self.ctrl.home_az_vel)
 
         # sleep until we're done and check status
-        await asyncio.sleep(self.ctrl.az_actuator.remaining_time + 0.1)
+        await asyncio.sleep(self.ctrl.az_actuator.remaining_time() + 0.1)
         reply_lines = await self.send_cmd("+")
         status = ATDome.Status(reply_lines)
         self.assertEqual(status.move_code, 0)
-        self.assertAlmostEqual(self.ctrl.az_actuator.speed.deg, self.ctrl.az_vel.deg)
+        self.assertAlmostEqual(self.ctrl.az_actuator.speed, self.ctrl.az_vel)
         self.assertAlmostEqual(
-            self.ctrl.az_actuator.current_position.deg, self.ctrl.home_az.deg
+            self.ctrl.az_actuator.position(salobj.current_tai()), self.ctrl.home_az
         )
 
     async def test_main_door(self):
@@ -293,7 +291,7 @@ class MockTestCase(asynctest.TestCase):
         az = daz
 
         # start azimuth motion
-        reply_lines = await self.send_cmd(f"{az.deg:0.2f} MV")
+        reply_lines = await self.send_cmd(f"{az:0.2f} MV")
         # open both doors
         reply_lines = await self.send_cmd("SO")
         self.assertEqual(reply_lines, [""])
@@ -303,8 +301,8 @@ class MockTestCase(asynctest.TestCase):
         reply_lines = await self.send_cmd("ST")
         reply_lines = await self.send_cmd("+")
         status = ATDome.Status(reply_lines)
-        self.assertLess(status.az_pos.deg, az.deg)
-        self.assertGreater(status.az_pos.deg, 0)
+        self.assertLess(status.az_pos, az)
+        self.assertGreater(status.az_pos, 0)
         self.assertLess(status.main_door_pct, 100)
         self.assertGreater(status.main_door_pct, 0)
         self.assertLess(status.dropout_door_pct, 100)
