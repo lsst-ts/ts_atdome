@@ -1,11 +1,14 @@
 pipeline {
-    agent docker {
-        image 'lsstts/conda_package_builder:latest'
-        alwaysPull 'true'
-        args "--env TS_CONFIG_ATTCS_DIR=/home/saluser/ts_config_attcs --env LSST_DDS_DOMAIN=citest -u root --entrypoint=''"
+    agent {
+        docker {
+            image 'lsstts/conda_package_builder:latest'
+            alwaysPull 'true'
+            args "--env TS_CONFIG_ATTCS_DIR=/home/saluser/ts_config_attcs --env LSST_DDS_DOMAIN=citest -u root --entrypoint=''"
+        }
     }
     environment {
         package_name = "atdome"
+        OSPL_HOME="/opt/OpenSpliceDDS/V6.9.0/HDE/x86_64.linux"
     }
 
     stages {
