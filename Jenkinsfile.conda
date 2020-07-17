@@ -32,6 +32,11 @@ pipeline {
                     cd /home/saluser/source/conda 
                     source /home/saluser/miniconda3/bin/activate 
                     source "$OSPL_HOME/release.com"
+                    cd ${HOME}/conda
+                    source /home/saluser/miniconda3/bin/activate
+                    conda config --add channels conda-forge
+                    conda config --add channels lsstts
+                    source ${OSPL_HOME}/release.com
                     conda build --prefix-length 100 .'
                     """
                 }
@@ -49,6 +54,11 @@ pipeline {
                         cd /home/saluser/source/conda
                         source /home/saluser/miniconda3/bin/activate
                         source "\$OSPL_HOME/release.com"
+                        cd ${HOME}/conda
+                        source /home/saluser/miniconda3/bin/activate
+                        conda config --add channels conda-forge
+                        conda config --add channels lsstts
+                        source ${OSPL_HOME}/release.com
                         conda build -c lsstts/label/dev --prefix-length 100 .
                     """
                 }
