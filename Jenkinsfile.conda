@@ -16,6 +16,7 @@ pipeline {
             steps {
                 withEnv(["HOME=${env.WORKSPACE}"]) {
                     sh """
+                        cd /home/saluser
                         git clone https://github.com/lsst-ts/ts_config_attcs
                     """
                 }
