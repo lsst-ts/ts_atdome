@@ -6,38 +6,79 @@
 lsst.ts.ATDome
 ##############
 
-Controller for the LSST auxiliary telescope dome.
+.. image:: https://img.shields.io/badge/SAL\ Interface-gray.svg
+    :target: https://ts-xml.lsst.io/sal_interfaces/ATDome.html
+.. image:: https://img.shields.io/badge/GitHub-gray.svg
+    :target: https://github.com/lsst-ts/ts_ATDome
+.. image:: https://img.shields.io/badge/Jira-gray.svg
+    :target: https://jira.lsstcorp.org/issues/?jql=labels+%3D+ts_ATDome
 
-.. _lsst.ts.ATDome-using:
+.. _lsst.ts.ATDome.overview:
 
-Using lsst.ts.ATDome
-====================
+Overview
+========
 
-The primary classes are:
+ATDome controls the Vera C. Rubin Observatory Auxiliary Telescope Dome.
 
-* `ATDomeCsc`: controller for the auxiliary telescope dome.
-* `MockDomeController`: simulator for the auxiliary telescope dome TCP/IP interface.
+The Auxiliary Telescope Dome is a 30 foot diameter Ash Dome with azimuth rotation and two shutter doors.
+The azimuth axis has no rotation limits.
+The top shutter door gives visibility from 30° elevation to zenith (90°), whereas the bottom shutter gives visibility from the horizon to 30° elevation.
 
-Run the ``ATDome`` controller  using ``bin/run_atdome.py`` (which only exists after you build the package).
 
-.. _building single package docs: https://developer.lsst.io/stack/building-single-package-docs.html
+.. _lsst.ts.ATDome.user_guide:
 
-.. _lsst.ts.ATDome-contributing:
+User Guide
+==========
 
-Contributing
-============
+Start the ATDome CSC as follows:
 
-``lsst.ts.ATDome`` is developed at https://github.com/lsst-ts/ts_ATDome.
-You can find Jira issues for this module using `labels=ts_ATDome <https://jira.lsstcorp.org/issues/?jql=project%20%3D%20DM%20AND%20labels%20%20%3D%20ts_ATDome>`_.
+.. prompt:: bash
 
-.. _lsst.ts.ATDome-pyapi:
+    run_atdome.py
 
-Python API reference
-====================
+Stop the CSC by sending it to the OFFLINE state.
 
-.. automodapi:: lsst.ts.ATDome
-   :no-main-docstr:
-   :no-inheritance-diagram:
+See ATDome `SAL communication interface <https://ts-xml.lsst.io/sal_interfaces/ATDome.html>`_ for commands, events and telemetry.
+
+For on-sky observing, send the `ATDomeTrajectory CSC <https://ts-atdometrajectory.lsst.io/>`_ to the ENABLED state. Then ``ATDomeTrajectory`` will automatically command ``ATDome`` azimuth to follow the telescope.
+When you want to command ``ATDome`` azimuth manually, send ``ATDomeTrajectory`` to the DISABLED state to prevent it from commanding ``ATDome``.
+
+The ``moveAzimuth`` command is reported as done as soon as the command is received; use the ``azimuthState`` event to track when the move finishes.
+The door commands are reported done when the doors have finished moving.
+
+New commands may be sent at any time.
+If a new door command arrives while the door is moving, the door immediately starts moving to the new position and the old door command is reported as superseded.
+
+.. _lsst.ts.ATDome.configuration:
+
+Configuration
+-------------
+
+It is unlikely that a user will have to modify the default configuration for ATDome, as it only contains parameters for the connection to the low-level controller.
+
+Configuration is defined by `this schema <https://github.com/lsst-ts/ts_ATDome/blob/develop/schema/ATDome.yaml>`_.
+
+Configuration files live in `ts_config_attcs/ATDome <https://github.com/lsst-ts/ts_config_attcs/tree/develop/ATDome>`_.
+
+.. _lsst.ts.ATDome.simulation:
+
+Simulator
+---------
+
+The CSC includes a simulation mode. To run using simulation:
+
+.. prompt:: bash
+
+    run_atdome.py --simulate
+
+The simulated azimuth axis and shutter doors move at constant speed, with infinite acceleration.
+
+Developer Guide
+===============
+
+.. toctree::
+    developer-guide
+    :maxdepth: 1
 
 Version History
 ===============
