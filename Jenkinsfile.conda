@@ -11,13 +11,13 @@ pipeline {
         OSPL_HOME="/opt/OpenSpliceDDS/V6.9.0/HDE/x86_64.linux"
     }
     options {
-        buildDiscarder
-            (logRotator (
+        buildDiscarder(
+            logRotator(
                 artifactDaysToKeepStr: '',
                 artifactNumToKeepStr: '',
                 daysToKeepStr: '14',
                 numToKeepStr: '10'
-            ) )
+            ))
         disableConcurrentBuilds()
     }
     stages {
