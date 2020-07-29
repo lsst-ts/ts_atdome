@@ -17,7 +17,7 @@ pipeline {
                 artifactNumToKeepStr: '',
                 daysToKeepStr: '14',
                 numToKeepStr: '10'
-            ) ),
+            ) )
         disableConcurrentBuilds()
     }
     stages {
