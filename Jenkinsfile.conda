@@ -1,5 +1,5 @@
 pipeline {
-    agent {
+    agent{
         docker {
             image 'lsstts/conda_package_builder:latest'
             alwaysPull 'true'
@@ -10,7 +10,16 @@ pipeline {
         package_name = "atdome"
         OSPL_HOME="/opt/OpenSpliceDDS/V6.9.0/HDE/x86_64.linux"
     }
-
+    options {
+        buildDiscarder
+            (logRotator (
+                artifactDaysToKeepStr: '',
+                artifactNumToKeepStr: '',
+                daysToKeepStr: '14',
+                numToKeepStr: '10'
+            ) ),
+        disableConcurrentBuilds()
+    }
     stages {
         stage("Clone ts_config_attcs") {
             steps {
@@ -22,7 +31,6 @@ pipeline {
                 }
             }
         }
-
         stage("Create Conda package") {
             when {
                 buildingTag()
@@ -35,7 +43,7 @@ pipeline {
                     conda config --add channels conda-forge
                     conda config --add channels lsstts
                     source ${OSPL_HOME}/release.com
-                    conda build --prefix-length 100 .'
+                    conda build --prefix-length 100 .
                     """
                 }
             }
