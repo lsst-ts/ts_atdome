@@ -6,6 +6,20 @@
 Version History
 ###############
 
+v1.2.1
+======
+
+Changes:
+
+* Overhaul the documentation.
+
+Requires:
+
+* ts_salobj 5.15
+* ts_simactuators 2
+* ts_idl
+* IDL file for ATDome from ts_xml 4.8
+
 v1.2.0
 ======
 
