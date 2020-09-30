@@ -6,6 +6,20 @@
 Version History
 ###############
 
+v1.3.0
+======
+
+Changes:
+
+* Update `ATDomeCsc` to use ts_salobj 6 simulation mode support.
+
+Requires:
+
+* ts_salobj 6
+* ts_simactuators 2
+* ts_idl
+* IDL file for ATDome from ts_xml 4.8
+
 v1.2.1
 ======
 
