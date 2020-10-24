@@ -3,7 +3,7 @@ pipeline {
         docker {
             image 'lsstts/conda_package_builder:latest'
             alwaysPull 'true'
-            args "--env TS_CONFIG_ATTCS_DIR=/home/saluser/ts_config_attcs --env LSST_DDS_DOMAIN=citest -u root --entrypoint=''"
+            args "--env TS_CONFIG_ATTCS_DIR=/home/saluser/ts_config_attcs --env LSST_DDS_PARTITION_PREFIX=citest -u root --entrypoint=''"
         }
     }
     environment {
@@ -72,7 +72,7 @@ pipeline {
                         sh """
                         source /home/saluser/miniconda3/bin/activate
                         anaconda login --user ${anaconda_user} --password ${anaconda_pass}
-                        anaconda upload -u lsstts --force ~/miniconda3/conda-bld/linux-64/ts-${package_name}*.tar.bz2
+                        anaconda upload -u lsstts --force /home/saluser/miniconda3/conda-bld/linux-64/ts-${package_name}*.tar.bz2
                         """
                     }
                 }

@@ -20,21 +20,11 @@ build:
 
 test:
   requires:
-    - pytest
-    - pytest-flake8
-    - pytest-cov
-    - asynctest
-    - numpy
-    - astropy
-    - jsonschema
-    - pyyaml
-    - boto3
-    - moto
+    - ts-conda-build
     - ts-simactuators
     - ts-dds
     - ts-idl
     - ts-salobj
-    - black
   source_files:
     - python
     - bin
