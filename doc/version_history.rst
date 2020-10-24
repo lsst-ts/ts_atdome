@@ -6,6 +6,20 @@
 Version History
 ###############
 
+v1.3.1
+======
+
+Changes:
+
+* Fixes conda build.
+
+Requires:
+
+* ts_salobj 6
+* ts_simactuators 2
+* ts_idl
+* IDL file for ATDome from ts_xml 4.8
+
 v1.3.0
 ======
 
