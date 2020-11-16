@@ -23,8 +23,8 @@ test:
     - ts-conda-build
     - ts-simactuators
     - ts-dds
-    - ts-idl
-    - ts-salobj
+    - ts-idl {{ idl_version }}
+    - ts-salobj {{ salobj_version }}
   source_files:
     - python
     - bin
