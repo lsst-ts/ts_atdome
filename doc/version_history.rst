@@ -6,6 +6,12 @@
 Version History
 ###############
 
+v1.3.2
+======
+
+* Update Jenkinsfile.conda to Jenkins Shared Library
+* Pinned the ts-idl and ts-salobj versions in the conda recipe
+
 v1.3.1
 ======
 
