@@ -41,6 +41,7 @@ STD_TIMEOUT = 2  # standard command timeout (sec)
 DOOR_TIMEOUT = 4  # time limit for shutter door commands (sec)
 LONG_TIMEOUT = 20  # timeout for starting SAL components (sec)
 TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
+NODATA_TIMEOUT = 1  # timeout waiting for data that should not be read (sec)
 
 
 class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
@@ -60,6 +61,9 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             await self.check_initial_shutter_events()
 
             await self.check_initial_az_events()
+            await self.assert_next_sample(
+                topic=self.remote.evt_allAxesInPosition, inPosition=False
+            )
 
             await self.assert_next_sample(
                 topic=self.remote.evt_emergencyStop, active=False
@@ -297,12 +301,32 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             position = self.remote.tel_position.get()
             self.assertAlmostEqual(position.azimuthPosition, desired_azimuth)
 
+            await self.assert_next_sample(
+                topic=self.remote.evt_azimuthInPosition, inPosition=True,
+            )
+
             # try several invalid values for azimuth
             for bad_az in (-0.001, 360.001):
                 with salobj.assertRaisesAckError():
                     await self.remote.cmd_moveAzimuth.set_start(
                         azimuth=bad_az, timeout=STD_TIMEOUT
                     )
+
+            # Move the shutter to its current location (for speed)
+            # and check evt_allAxesInPosition.
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterInPosition, inPosition=False
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_allAxesInPosition, inPosition=False
+            )
+            await self.remote.cmd_closeShutter.set_start(timeout=STD_TIMEOUT)
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterInPosition, inPosition=True
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_allAxesInPosition, inPosition=True
+            )
 
     async def test_move_shutter(self):
         """Test openShutter and closeShutter commands.
@@ -850,9 +874,6 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 state=AzimuthState.MOVINGCCW,
                 homing=False,
             )
-            await self.assert_next_sample(
-                self.remote.evt_azimuthInPosition, inPosition=False
-            )
 
             # check that the shutter was told to open;
             # shutter_in_position remains false so is not output
@@ -878,7 +899,9 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 homing=False,
             )
             with self.assertRaises(asyncio.TimeoutError):
-                await self.remote.evt_azimuthInPosition.next(flush=False, timeout=0.1)
+                await self.remote.evt_azimuthInPosition.next(
+                    flush=False, timeout=NODATA_TIMEOUT
+                )
 
             # check that the shutter was told to close
             await self.check_shutter_events(
@@ -916,9 +939,6 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 state=AzimuthState.MOVINGCCW,
                 homing=False,
             )
-            await self.assert_next_sample(
-                self.remote.evt_azimuthInPosition, inPosition=False
-            )
 
             # check that the shutter was told to open;
             # shutter_in_position remains false so is not output
@@ -944,7 +964,9 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 homing=False,
             )
             with self.assertRaises(asyncio.TimeoutError):
-                await self.remote.evt_azimuthInPosition.next(flush=False, timeout=0.1)
+                await self.remote.evt_azimuthInPosition.next(
+                    flush=False, timeout=NODATA_TIMEOUT
+                )
 
             # check that the shutter was told to stop;
             # shutter_in_position remains false so is not output
@@ -955,7 +977,9 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 main_door_state=ShutterDoorState.PARTIALLYOPENED,
             )
             with self.assertRaises(asyncio.TimeoutError):
-                await self.remote.evt_shutterInPosition.next(flush=False, timeout=0.1)
+                await self.remote.evt_shutterInPosition.next(
+                    flush=False, timeout=NODATA_TIMEOUT
+                )
 
     async def test_bin_script(self):
         await self.check_bin_script(name="ATDome", index=None, exe_name="run_atdome.py")
@@ -989,6 +1013,10 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             topic=self.remote.evt_azimuthState,
             state=AzimuthState.NOTINMOTION,
             homing=False,
+        )
+
+        await self.assert_next_sample(
+            topic=self.remote.evt_azimuthInPosition, inPosition=False,
         )
 
     async def check_initial_shutter_events(self):
@@ -1038,37 +1066,31 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             If None then this event is not read.
         """
         if main_door_cmd_state is not None:
-            data = await self.remote.evt_mainDoorCommandedState.next(
-                flush=False, timeout=STD_TIMEOUT
+            await self.assert_next_sample(
+                topic=self.remote.evt_mainDoorCommandedState,
+                commandedState=main_door_cmd_state,
             )
-            self.assertEqual(data.commandedState, main_door_cmd_state)
 
         if dropout_door_cmd_state is not None:
-            data = await self.remote.evt_dropoutDoorCommandedState.next(
-                flush=False, timeout=STD_TIMEOUT
+            await self.assert_next_sample(
+                topic=self.remote.evt_dropoutDoorCommandedState,
+                commandedState=dropout_door_cmd_state,
             )
-            self.assertEqual(data.commandedState, dropout_door_cmd_state)
 
         if main_door_state is not None:
-            data = await self.remote.evt_mainDoorState.next(
-                flush=False, timeout=STD_TIMEOUT
+            await self.assert_next_sample(
+                topic=self.remote.evt_mainDoorState, state=main_door_state
             )
-            self.assertEqual(data.state, main_door_state)
 
         if dropout_door_state is not None:
-            data = await self.remote.evt_dropoutDoorState.next(
-                flush=False, timeout=STD_TIMEOUT
+            await self.assert_next_sample(
+                topic=self.remote.evt_dropoutDoorState, state=dropout_door_state
             )
-            self.assertEqual(data.state, dropout_door_state)
 
         if shutter_in_position is not None:
-            data = await self.remote.evt_shutterInPosition.next(
-                flush=False, timeout=STD_TIMEOUT
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterInPosition, inPosition=shutter_in_position
             )
-            if shutter_in_position:
-                self.assertTrue(data.inPosition)
-            else:
-                self.assertFalse(data.inPosition)
 
 
 if __name__ == "__main__":
