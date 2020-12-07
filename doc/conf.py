@@ -9,7 +9,8 @@ import lsst.ts.ATDome
 
 _g = globals()
 _g.update(
-    build_package_configs(
-        project_name="ts_ATDome", version=lsst.ts.ATDome.version.__version__
-    )
+    build_package_configs(project_name="ts_ATDome", version=lsst.ts.ATDome.__version__)
 )
+
+intersphinx_mapping["ts_xml"] = ("https://ts-xml.lsst.io", None)  # noqa
+intersphinx_mapping["ts_salobj"] = ("https://ts-salobj.lsst.io", None)  # noqa

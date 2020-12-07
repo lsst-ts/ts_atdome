@@ -6,18 +6,33 @@
 Version History
 ###############
 
+v1.3.3
+======
+
+* Fix an exception in the status loop caused by comparing an astropy unit to a scalar (DM-27885).
+* Update the unit tests to check the three inPosition events after a move (which catches DM-27885).
+* Add intersphinx mapping to ts_salobj and ts_xml to the documentation.
+* Use ``pre-commit`` instead of a custom git pre-commit hook.
+
+Requires:
+
+* ts_salobj 6
+* ts_simactuators 2
+* ts_idl
+* IDL file for ATDome from ts_xml 4.8
+
 v1.3.2
 ======
 
 * Update Jenkinsfile.conda to Jenkins Shared Library
-* Pinned the ts-idl and ts-salobj versions in the conda recipe
+* Pin the ts-idl and ts-salobj versions in the conda recipe
 
 v1.3.1
 ======
 
 Changes:
 
-* Fixes conda build.
+* Fix conda build.
 
 Requires:
 
