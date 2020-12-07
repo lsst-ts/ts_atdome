@@ -24,7 +24,6 @@ The Auxiliary Telescope Dome is a 30 foot diameter Ash Dome with azimuth rotatio
 The azimuth axis has no rotation limits.
 The top shutter door gives visibility from 30° elevation to zenith (90°), whereas the bottom shutter gives visibility from the horizon to 30° elevation.
 
-
 .. _lsst.ts.ATDome.user_guide:
 
 User Guide
@@ -77,7 +76,7 @@ Developer Guide
 ===============
 
 .. toctree::
-    developer-guide
+    developer_guide
     :maxdepth: 1
 
 Version History

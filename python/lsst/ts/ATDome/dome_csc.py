@@ -359,7 +359,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             daz = salobj.angle_diff(
                 self.tel_position.data.azimuthPosition,
                 self.evt_azimuthCommandedState.data.azimuth,
-            )
+            ).deg
             if abs(daz) < self.az_tolerance:
                 mask |= Axis.AZ
 
