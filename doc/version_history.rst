@@ -6,6 +6,18 @@
 Version History
 ###############
 
+v1.3.4
+======
+
+* `ATDomeCsc`: update the moveAzimuth command to support azimuth angles outside the range [0, 360)
+
+Requires:
+
+* ts_salobj 6
+* ts_simactuators 2
+* ts_idl
+* IDL file for ATDome from ts_xml 4.8
+
 v1.3.3
 ======
 
