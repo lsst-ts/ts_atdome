@@ -42,6 +42,7 @@ DOOR_TIMEOUT = 4  # time limit for shutter door commands (sec)
 LONG_TIMEOUT = 20  # timeout for starting SAL components (sec)
 TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
 NODATA_TIMEOUT = 1  # timeout waiting for data that should not be read (sec)
+FLOAT_DELTA = 1e-4  # delta to use when comparing two float angles
 
 
 class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
@@ -266,51 +267,112 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             )
             self.assertAlmostEqual(position.azimuthPosition, home_azimuth)
 
-    async def test_move_az(self):
+    def assert_angle_in_range(self, angle, min_angle, max_angle):
+        """Assert that an angle is in the given range.
+
+        All arguments must be in range [0, 360) (and this is checked).
+
+        If max_angle < min_angle then the check is:
+        min_angle <= angle < 360 or 0 <= angle < max_angle
+
+        Parameters
+        ----------
+        angle : `float`
+            Angle to check (deg)
+        min_angle : `float`
+            Minimum angle, inclusive (deg)
+        max_angle : `float`
+            Maximum angle, exclusive (deg)
+
+        Raises
+        ------
+        AssertionError
+            If angle, min_angle, or max_angle not in range [0, 360)
+            If angle not in the specified range.
+        """
+        for argname in ("angle", "min_angle", "max_angle"):
+            argvalue = locals()[argname]
+            if not 0 <= argvalue < 360:
+                raise AssertionError(
+                    f"Argument {argname} = {argvalue} not in range [0, 360)"
+                )
+        if min_angle > max_angle:
+            if not (min_angle <= angle < 360 or 0 <= angle < max_angle):
+                raise AssertionError(
+                    f"angle {angle} not in range [{min_angle}, 360) or [0, {max_angle}]"
+                )
+        else:
+            if not (min_angle <= angle < max_angle):
+                raise AssertionError(
+                    f"angle {angle} not in range [{min_angle}, {max_angle}]"
+                )
+
+    async def test_move_azimuth(self):
         async with self.make_csc(
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
             await self.check_initial_az_events()
 
-            desired_azimuth = 354
-            await self.remote.cmd_moveAzimuth.set_start(
-                azimuth=desired_azimuth, timeout=STD_TIMEOUT
-            )
-
-            # wait for the move to begin and check status
-            az_cmd_state = await self.assert_next_sample(
-                topic=self.remote.evt_azimuthCommandedState,
-                commandedState=AzimuthCommandedState.GOTOPOSITION,
-            )
-            self.assertAlmostEqual(az_cmd_state.azimuth, desired_azimuth)
-            await self.assert_next_sample(
-                topic=self.remote.evt_azimuthState,
-                state=AzimuthState.MOVINGCCW,
-                homing=False,
-            )
-            position = self.remote.tel_position.get()
-            self.assertGreater(position.azimuthPosition, desired_azimuth)
-            self.assertLess(position.azimuthPosition, 360)
-
-            # wait for the move to end and check status
-            await self.assert_next_sample(
-                topic=self.remote.evt_azimuthState,
-                state=AzimuthState.NOTINMOTION,
-                homing=False,
-            )
-            position = self.remote.tel_position.get()
-            self.assertAlmostEqual(position.azimuthPosition, desired_azimuth)
-
-            await self.assert_next_sample(
-                topic=self.remote.evt_azimuthInPosition, inPosition=True,
-            )
-
-            # try several invalid values for azimuth
-            for bad_az in (-0.001, 360.001):
-                with salobj.assertRaisesAckError():
-                    await self.remote.cmd_moveAzimuth.set_start(
-                        azimuth=bad_az, timeout=STD_TIMEOUT
+            # Try several angles, including some not in the range [0, 360);
+            # CW direction is towards larger azimuth
+            isFirst = True
+            for desired_azimuth, desired_moving_state, min_angle, max_angle in (
+                (325.1, AzimuthState.MOVINGCCW, 325.1, 0),
+                (-1.2, AzimuthState.MOVINGCW, 325.1, 360 - 1.2),
+                (390.3, AzimuthState.MOVINGCW, 360 - 1.2, 390.3 - 360),
+            ):
+                wrapped_desired_azimuth = salobj.angle_wrap_nonnegative(
+                    desired_azimuth
+                ).deg
+                await self.remote.cmd_moveAzimuth.set_start(
+                    azimuth=desired_azimuth, timeout=STD_TIMEOUT
+                )
+                if not isFirst:
+                    await self.assert_next_sample(
+                        topic=self.remote.evt_azimuthInPosition, inPosition=False,
                     )
+
+                # wait for the move to begin and check status
+                az_cmd_state = await self.assert_next_sample(
+                    topic=self.remote.evt_azimuthCommandedState,
+                    commandedState=AzimuthCommandedState.GOTOPOSITION,
+                )
+                self.assertAlmostEqual(
+                    az_cmd_state.azimuth, wrapped_desired_azimuth, delta=FLOAT_DELTA
+                )
+                await self.assert_next_sample(
+                    topic=self.remote.evt_azimuthState,
+                    state=desired_moving_state,
+                    homing=False,
+                )
+
+                # While the move occurs test that the position is in range
+                # (i.e. the dome didn't go the wrong way around)
+                while True:
+                    azimuth_state = self.remote.evt_azimuthState.get()
+                    if azimuth_state.state != desired_moving_state:
+                        break
+                    position = self.remote.tel_position.get()
+                    self.assert_angle_in_range(
+                        position.azimuthPosition, min_angle, max_angle
+                    )
+                    await asyncio.sleep(0.1)
+
+                # Make sure the final state is as expected
+                await self.assert_next_sample(
+                    topic=self.remote.evt_azimuthState,
+                    state=AzimuthState.NOTINMOTION,
+                    homing=False,
+                )
+                position = self.remote.tel_position.get()
+                self.assertAlmostEqual(
+                    position.azimuthPosition, wrapped_desired_azimuth, delta=FLOAT_DELTA
+                )
+
+                await self.assert_next_sample(
+                    topic=self.remote.evt_azimuthInPosition, inPosition=True,
+                )
+                isFirst = False
 
             # Move the shutter to its current location (for speed)
             # and check evt_allAxesInPosition.
