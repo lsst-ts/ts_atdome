@@ -139,6 +139,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.cmd_lock = asyncio.Lock()
         self.config = None
         self.mock_port = mock_port
+        self._previous_move_code = None
         super().__init__(
             "ATDome",
             index=0,
@@ -598,6 +599,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 self.status_task, timeout=self.config.read_timeout * 2
             )
         await self.stop_mock_ctrl()
+        self._previous_move_code = None
 
     def handle_status(self, lines):
         """Handle output of "?" command.
@@ -631,6 +633,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         )
 
         move_code = status.move_code
+        if move_code != self._previous_move_code:
+            self.log.info(f"move code = 0x{move_code:03X}")
+            self._previous_move_code = move_code
         self.evt_azimuthState.set_put(
             state=self.compute_az_state(move_code),
             homing=bool(move_code & MoveCode.HOMING),
