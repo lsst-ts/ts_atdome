@@ -625,6 +625,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         )
 
         move_code = status.move_code
+        self.evt_moveCode.set_put(code=move_code)
         self.evt_azimuthState.set_put(
             state=self.compute_az_state(move_code),
             homing=bool(move_code & MoveCode.AZIMUTH_HOMING),
