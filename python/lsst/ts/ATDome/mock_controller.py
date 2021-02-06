@@ -300,9 +300,9 @@ class MockDomeController:
             current_position = actuator.position(curr_tai)
             current_velocity = actuator.velocity(curr_tai)
             if current_velocity < 0:
-                move_code += closing_code
+                move_code |= closing_code
             elif current_velocity > 0:
-                move_code += opening_code
+                move_code |= opening_code
             else:
                 if current_position == 0:
                     state_str = "CLOSED"
@@ -312,9 +312,9 @@ class MockDomeController:
         enabled_str = "ON" if self.auto_shutdown_enabled else "OFF"
         sensor_mask = 0
         if self.rain_detected:
-            sensor_mask += 1
+            sensor_mask |= 1
         if self.clouds_detected:
-            sensor_mask += 2
+            sensor_mask |= 2
         outputs.append(f"[{enabled_str}] {sensor_mask:02d}")
 
         az_moving = self.az_actuator.moving(curr_tai)
@@ -328,14 +328,14 @@ class MockDomeController:
             dir_code = "RL"
         if az_moving:
             if self.last_rot_right:
-                move_code += MoveCode.AZIMUTH_POSITIVE
+                move_code |= MoveCode.AZIMUTH_POSITIVE
             else:
-                move_code += MoveCode.AZIMUTH_NEGATIVE
+                move_code |= MoveCode.AZIMUTH_NEGATIVE
         if self.homing:
-            move_code += MoveCode.AZIMUTH_HOMING
+            move_code |= MoveCode.AZIMUTH_HOMING
 
         if self.estop_active:
-            move_code += MoveCode.ESTOP
+            move_code |= MoveCode.ESTOP
         outputs.append(f"{dir_code} {move_code:03d}")
         return outputs
 
