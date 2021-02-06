@@ -32,27 +32,17 @@ from lsst.ts.idl.enums.ATDome import (
     ShutterDoorCommandedState,
     ShutterDoorState,
 )
+from .enums import MoveCode
 from .mock_controller import MockDomeController
 from .status import Status
 
 _LOCAL_HOST = "127.0.0.1"
 
 
-class MoveCode(enum.IntFlag):
-    AZPOSITIVE = 1
-    AZNEGATIVE = 2
-    MAINDOORCLOSING = 4
-    MAINDOOROPENING = 8
-    DROPOUTDOORCLOSING = 16
-    DROPOUTDOOROPENING = 32
-    HOMING = 64
-    ESTOP = 128
-
-
 class Axis(enum.Flag):
-    AZ = enum.auto()
-    DROPOUTDOOR = enum.auto()
-    MAINDOOR = enum.auto()
+    AZIMUTH = enum.auto()
+    DROPOUT_DOOR = enum.auto()
+    MAIN_DOOR = enum.auto()
 
 
 class ATDomeCsc(salobj.ConfigurableCsc):
@@ -346,7 +336,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             A bit mask with 1 for each axis that is in position.
         """
         mask = Axis(0)
-        az_halted = move_code & (MoveCode.AZPOSITIVE | MoveCode.AZNEGATIVE) == 0
+        az_halted = (
+            move_code & (MoveCode.AZIMUTH_POSITIVE | MoveCode.AZIMUTH_NEGATIVE) == 0
+        )
         if (
             az_halted
             and self.evt_azimuthCommandedState.data.commandedState
@@ -357,10 +349,11 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 self.evt_azimuthCommandedState.data.azimuth,
             ).deg
             if abs(daz) < self.az_tolerance:
-                mask |= Axis.AZ
+                mask |= Axis.AZIMUTH
 
         dropout_halted = (
-            move_code & (MoveCode.DROPOUTDOORCLOSING | MoveCode.DROPOUTDOOROPENING) == 0
+            move_code & (MoveCode.DROPOUT_DOOR_CLOSING | MoveCode.DROPOUT_DOOR_OPENING)
+            == 0
         )
         if dropout_halted:
             if (
@@ -368,16 +361,17 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 == ShutterDoorCommandedState.OPENED
             ):
                 if self.tel_position.data.dropoutDoorOpeningPercentage == 100:
-                    mask |= Axis.DROPOUTDOOR
+                    mask |= Axis.DROPOUT_DOOR
             elif (
                 self.evt_dropoutDoorCommandedState.data.commandedState
                 == ShutterDoorCommandedState.CLOSED
             ):
                 if self.tel_position.data.dropoutDoorOpeningPercentage == 0:
-                    mask |= Axis.DROPOUTDOOR
+                    mask |= Axis.DROPOUT_DOOR
 
         dropout_halted = (
-            move_code & (MoveCode.DROPOUTDOORCLOSING | MoveCode.DROPOUTDOOROPENING) == 0
+            move_code & (MoveCode.DROPOUT_DOOR_CLOSING | MoveCode.DROPOUT_DOOR_OPENING)
+            == 0
         )
         if dropout_halted:
             if (
@@ -385,16 +379,16 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 == ShutterDoorCommandedState.OPENED
             ):
                 if self.tel_position.data.dropoutDoorOpeningPercentage == 100:
-                    mask |= Axis.DROPOUTDOOR
+                    mask |= Axis.DROPOUT_DOOR
             elif (
                 self.evt_dropoutDoorCommandedState.data.commandedState
                 == ShutterDoorCommandedState.CLOSED
             ):
                 if self.tel_position.data.dropoutDoorOpeningPercentage == 0:
-                    mask |= Axis.DROPOUTDOOR
+                    mask |= Axis.DROPOUT_DOOR
 
         main_halted = (
-            move_code & (MoveCode.MAINDOORCLOSING | MoveCode.MAINDOOROPENING) == 0
+            move_code & (MoveCode.MAIN_DOOR_CLOSING | MoveCode.MAIN_DOOR_OPENING) == 0
         )
         if main_halted:
             if (
@@ -402,13 +396,13 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 == ShutterDoorCommandedState.OPENED
             ):
                 if self.tel_position.data.mainDoorOpeningPercentage == 100:
-                    mask |= Axis.MAINDOOR
+                    mask |= Axis.MAIN_DOOR
             elif (
                 self.evt_mainDoorCommandedState.data.commandedState
                 == ShutterDoorCommandedState.CLOSED
             ):
                 if self.tel_position.data.mainDoorOpeningPercentage == 0:
-                    mask |= Axis.MAINDOOR
+                    mask |= Axis.MAIN_DOOR
 
         return mask
 
@@ -425,9 +419,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         state : `int`
             The appropriate `AzimuthState` enum value.
         """
-        if move_code & MoveCode.AZPOSITIVE:
+        if move_code & MoveCode.AZIMUTH_POSITIVE:
             state = AzimuthState.MOVINGCW
-        elif move_code & MoveCode.AZNEGATIVE:
+        elif move_code & MoveCode.AZIMUTH_NEGATIVE:
             state = AzimuthState.MOVINGCCW
         else:
             state = AzimuthState.NOTINMOTION
@@ -446,10 +440,10 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             Motion code: the integer from line 5 of short status.
         """
         closing_code = (
-            MoveCode.MAINDOORCLOSING if is_main else MoveCode.DROPOUTDOORCLOSING
+            MoveCode.MAIN_DOOR_CLOSING if is_main else MoveCode.DROPOUT_DOOR_CLOSING
         )
         opening_code = (
-            MoveCode.MAINDOOROPENING if is_main else MoveCode.DROPOUTDOOROPENING
+            MoveCode.MAIN_DOOR_OPENING if is_main else MoveCode.DROPOUT_DOOR_OPENING
         )
         door_mask = closing_code | opening_code
         door_state = None
@@ -631,9 +625,10 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         )
 
         move_code = status.move_code
+        self.evt_moveCode.set_put(code=move_code)
         self.evt_azimuthState.set_put(
             state=self.compute_az_state(move_code),
-            homing=bool(move_code & MoveCode.HOMING),
+            homing=bool(move_code & MoveCode.AZIMUTH_HOMING),
         )
 
         dropout_door_state = self.compute_door_state(
@@ -656,8 +651,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         def in_position(mask):
             return in_position_mask & mask == mask
 
-        azimuth_in_position = in_position(Axis.AZ)
-        shutter_in_position = in_position(Axis.DROPOUTDOOR | Axis.MAINDOOR)
+        azimuth_in_position = in_position(Axis.AZIMUTH)
+        shutter_in_position = in_position(Axis.DROPOUT_DOOR | Axis.MAIN_DOOR)
         self.evt_azimuthInPosition.set_put(inPosition=azimuth_in_position)
         self.evt_shutterInPosition.set_put(inPosition=shutter_in_position)
         self.evt_allAxesInPosition.set_put(

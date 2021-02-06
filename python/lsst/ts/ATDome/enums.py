@@ -17,14 +17,18 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from .enums import *
-from .status import *
-from .dome_csc import *
-from .mock_controller import *
+__all__ = ["MoveCode"]
 
-try:
-    from .version import *
-except ImportError:
-    __version__ = "?"
+import enum
+
+
+class MoveCode(enum.IntFlag):
+    AZIMUTH_POSITIVE = 0x01
+    AZIMUTH_NEGATIVE = 0x02
+    MAIN_DOOR_CLOSING = 0x04
+    MAIN_DOOR_OPENING = 0x08
+    DROPOUT_DOOR_CLOSING = 0x10
+    DROPOUT_DOOR_OPENING = 0x20
+    AZIMUTH_HOMING = 0x40
+    ESTOP = 0x80

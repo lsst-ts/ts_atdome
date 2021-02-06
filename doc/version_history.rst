@@ -6,6 +6,19 @@
 Version History
 ###############
 
+v1.4.0
+======
+
+* `ATDomeCsc`: publish the new moveCode event. This requires ts_xml 7.2.
+* `MoveCode`: make this a public class and update `MockDomeController` to use it.
+
+Requires:
+
+* ts_salobj 6
+* ts_simactuators 2
+* ts_idl
+* IDL file for ATDome from ts_xml 7.2
+
 v1.3.4
 ======
 
