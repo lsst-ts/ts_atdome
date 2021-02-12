@@ -1078,6 +1078,10 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 main_door_state=ShutterDoorState.OPENING,
             )
 
+            # Give the shutters a chance to move. This works around
+            # a race condition that Tiago reported.
+            await asyncio.sleep(0.1)
+
             # Stop all motion.
             # This should not produce new "inPosition" events, because
             # motion is stopped while the axes are still not in position.
