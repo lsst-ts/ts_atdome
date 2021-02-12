@@ -278,7 +278,7 @@ class MockDomeController:
     def do_short_status(self):
         """Create short status as a list of strings."""
         curr_tai = salobj.current_tai()
-        move_code = 0
+        move_code = MoveCode(0)
         outputs = []
         for door, name, closing_code in (
             (Door.Main, "MAIN", 4),
@@ -323,8 +323,8 @@ class MockDomeController:
             move_code += 64
 
         if self.estop_active:
-            move_code += 128
-        outputs.append(f"{dir_code} {move_code:03d}")
+            move_code |= MoveCode.ESTOP
+        outputs.append(f"{dir_code} {move_code.value:03d}")
         return outputs
 
     def do_full_status(self):
