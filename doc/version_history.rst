@@ -11,6 +11,7 @@ v1.4.0
 
 * `ATDomeCsc`: publish the new moveCode event. This requires ts_xml 7.2.
 * `MoveCode`: make this a public class and update `MockDomeController` to use it.
+* Fixed a race condition in test_stop in test_csc.py.
 
 Requires:
 
