@@ -10,8 +10,12 @@ v1.4.0
 ======
 
 * `ATDomeCsc`: publish the new moveCode event. This requires ts_xml 7.2.
+* `ATDomeCsc`: set class variable ``version`` and test that this properly sets the ``cscVersion`` field of the ``softwareVersions`` event.
+* `ATDomeCsc`: make the ``standby`` command more reliable by eliminating a race condition that could cause a fault.
 * `MoveCode`: make this a public class and update `MockDomeController` to use it.
+* `MockDomeController`: change the initial azimuth and specify it in a new constant ``INITIAL_AZIMUTH``.
 * Fixed a race condition in test_stop in test_csc.py.
+* Update doc/conf.py for documenteer 0.6.
 
 Requires:
 
