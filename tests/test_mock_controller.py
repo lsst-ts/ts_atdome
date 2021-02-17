@@ -74,7 +74,7 @@ class MockTestCase(asynctest.TestCase):
         self.assertEqual(status.dropout_door_pct, 0)
         self.assertEqual(status.auto_shutdown_enabled, self.ctrl.auto_shutdown_enabled)
         self.assertEqual(status.sensor_code, 0)
-        self.assertAlmostEqual(status.az_pos, 0)
+        self.assertAlmostEqual(status.az_pos, ATDome.INITIAL_AZIMUTH)
         self.assertEqual(status.move_code, 0)
         self.assertEqual(status.estop_active, self.ctrl.estop_active)
         self.assertEqual(status.scb_link_ok, self.ctrl.scb_link_ok)
@@ -113,23 +113,27 @@ class MockTestCase(asynctest.TestCase):
         self.assertEqual(len(reply_lines), 25)
 
     async def test_move_az(self):
+        # Test initial conditions; some details of this test
+        # may have to be changed if this value changes.
+        self.assertAlmostEqual(ATDome.INITIAL_AZIMUTH, 285)
+
         daz = -3
-        az = 360 + daz
+        az = ATDome.INITIAL_AZIMUTH + daz
         est_duration = abs(daz / self.ctrl.az_vel)
         reply_lines = await self.send_cmd(f"{az:0.2f} MV")
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
         reply_lines = await self.send_cmd("+")
         status = ATDome.Status(reply_lines)
-        self.assertLess(status.az_pos, 360)
-        self.assertGreater(status.az_pos, 357)
+        self.assertLess(status.az_pos, ATDome.INITIAL_AZIMUTH)
+        self.assertGreater(status.az_pos, ATDome.INITIAL_AZIMUTH + daz)
         self.assertEqual(status.move_code, 2)
 
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
         reply_lines = await self.send_cmd("+")
         status = ATDome.Status(reply_lines)
-        self.assertAlmostEqual(status.az_pos, 357)
+        self.assertAlmostEqual(status.az_pos, az)
         self.assertEqual(status.move_code, 0)
 
     async def test_home_az(self):
@@ -288,7 +292,7 @@ class MockTestCase(asynctest.TestCase):
     async def test_stop(self):
         est_duration = self.ctrl.door_time
         daz = self.ctrl.az_vel * est_duration
-        az = daz
+        az = ATDome.INITIAL_AZIMUTH + daz
 
         # start azimuth motion
         reply_lines = await self.send_cmd(f"{az:0.2f} MV")

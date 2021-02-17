@@ -18,7 +18,7 @@
 #
 # You should have received a copy of the GNU General Public License
 
-__all__ = ["MockDomeController"]
+__all__ = ["INITIAL_AZIMUTH", "MockDomeController"]
 
 import asyncio
 import enum
@@ -30,6 +30,9 @@ from lsst.ts import salobj
 from .enums import MoveCode
 
 logging.basicConfig()
+
+# Initial azimuth (deg)
+INITIAL_AZIMUTH = 285
 
 
 class Door(enum.Flag):
@@ -99,7 +102,9 @@ class MockDomeController:
         self.home_az_overshoot = home_az_overshoot
         self.home_az_vel = home_az_vel
         self.encoder_counts_per_360 = 4018143232
-        self.az_actuator = simactuators.CircularPointToPointActuator(speed=az_vel)
+        self.az_actuator = simactuators.CircularPointToPointActuator(
+            speed=az_vel, start_position=INITIAL_AZIMUTH
+        )
         self.az_move_timeout = 120
         self.watchdog_reset_time = 600
         self.dropout_timer = 5
