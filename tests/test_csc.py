@@ -58,6 +58,11 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
         async with self.make_csc(
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
+            await self.assert_next_sample(
+                self.remote.evt_softwareVersions,
+                cscVersion=ATDome.__version__,
+                subsystemVersions="",
+            )
             mock_ctrl = self.csc.mock_ctrl
             await self.check_initial_shutter_events()
 

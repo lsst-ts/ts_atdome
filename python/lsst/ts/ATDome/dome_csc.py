@@ -32,6 +32,7 @@ from lsst.ts.idl.enums.ATDome import (
     ShutterDoorCommandedState,
     ShutterDoorState,
 )
+from . import __version__
 from .enums import MoveCode
 from .mock_controller import MockDomeController
 from .status import Status
@@ -83,6 +84,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     """
 
     valid_simulation_modes = (0, 1)
+    version = __version__
 
     def __init__(
         self,
