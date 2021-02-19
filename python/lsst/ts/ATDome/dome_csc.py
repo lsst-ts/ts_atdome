@@ -32,6 +32,7 @@ from lsst.ts.idl.enums.ATDome import (
     ShutterDoorCommandedState,
     ShutterDoorState,
 )
+from . import __version__
 from .enums import MoveCode
 from .mock_controller import MockDomeController
 from .status import Status
@@ -83,6 +84,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     """
 
     valid_simulation_modes = (0, 1)
+    version = __version__
 
     def __init__(
         self,
@@ -288,22 +290,32 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
         async with self.cmd_lock:
             self.writer.write(f"{cmd}\r\n".encode())
-            await self.writer.drain()
-            if cmd == "?":
-                # Turn short status into long status
-                cmd = "+"
-            expected_lines = {"+": 25}.get(cmd, 0)  # excluding final ">" line
-
             try:
+                await self.writer.drain()
+                if not self.connected:
+                    return
+
+                if cmd == "?":
+                    # Turn short status into long status
+                    cmd = "+"
+                expected_lines = {"+": 25}.get(cmd, 0)  # excluding final ">" line
+
                 read_bytes = await asyncio.wait_for(
                     self.reader.readuntil(b">"), timeout=self.config.read_timeout
                 )
+                if not self.connected:
+                    return
             except Exception as e:
+                if not self.connected:
+                    # Disconnecting; ignore communication errors
+                    return
+
                 if isinstance(e, asyncio.streams.IncompleteReadError):
-                    err_msg = "TCP/IP controller exited"
+                    err_msg = "TCP/IP connection lost"
+                    self.log.error(err_msg)
                 else:
-                    err_msg = "TCP/IP read failed"
-                self.log.exception(err_msg)
+                    err_msg = "TCP/IP writer or read failed"
+                    self.log.exception(err_msg)
                 await self.disconnect()
                 self.fault(code=2, report=f"{err_msg}: {e}")
                 raise salobj.ExpectedError(err_msg)

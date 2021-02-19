@@ -58,6 +58,11 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
         async with self.make_csc(
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
+            await self.assert_next_sample(
+                self.remote.evt_softwareVersions,
+                cscVersion=ATDome.__version__,
+                subsystemVersions="",
+            )
             mock_ctrl = self.csc.mock_ctrl
             await self.check_initial_shutter_events()
 
@@ -76,7 +81,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 dropoutDoorOpeningPercentage=0,
                 mainDoorOpeningPercentage=0,
             )
-            self.assertAlmostEqual(position.azimuthPosition, 0)
+            self.assertAlmostEqual(position.azimuthPosition, ATDome.INITIAL_AZIMUTH)
 
             ctrllr_settings = await self.assert_next_sample(
                 topic=self.remote.evt_settingsAppliedDomeController,
@@ -324,13 +329,19 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             await self.check_initial_az_events()
             await self.assert_next_sample(self.remote.evt_moveCode, code=0)
 
+            # Test an initial condition necessary for this test.
+            # If this fails then the first entry in
+            # `for desired_azimuth, ...` may need to be updated.
+            self.assertAlmostEqual(ATDome.INITIAL_AZIMUTH, 285)
+
             # Try several angles, including some not in the range [0, 360);
             # CW direction is towards larger azimuth.
             isFirst = True
             for desired_azimuth, desired_moving_state, min_angle, max_angle in (
-                (325.1, AzimuthState.MOVINGCCW, 325.1, 0),
-                (-1.2, AzimuthState.MOVINGCW, 325.1, 360 - 1.2),
-                (390.3, AzimuthState.MOVINGCW, 360 - 1.2, 390.3 - 360),
+                (325.1, AzimuthState.MOVINGCW, 285, 325.1),
+                (-1.2, AzimuthState.MOVINGCW, 325.1, -1.2 + 360),
+                (390.3, AzimuthState.MOVINGCW, -1.2 + 360, 390.3 - 360),
+                (-1.2, AzimuthState.MOVINGCCW, -1.2 + 360, 390.3 - 360),
             ):
                 wrapped_desired_azimuth = salobj.angle_wrap_nonnegative(
                     desired_azimuth
@@ -991,7 +1002,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
 
             # Move azimuth and start opening the shutter.
             await self.remote.cmd_moveAzimuth.set_start(
-                azimuth=354, timeout=STD_TIMEOUT
+                azimuth=ATDome.INITIAL_AZIMUTH - 10, timeout=STD_TIMEOUT
             )
             shutter_open_task = asyncio.ensure_future(
                 self.remote.cmd_openShutter.start(timeout=STD_TIMEOUT)
@@ -1056,7 +1067,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
 
             # Move azimuth and start opening the shutter.
             await self.remote.cmd_moveAzimuth.set_start(
-                azimuth=354, timeout=STD_TIMEOUT
+                azimuth=ATDome.INITIAL_AZIMUTH - 10, timeout=STD_TIMEOUT
             )
             shutter_open_task = asyncio.ensure_future(
                 self.remote.cmd_openShutter.start(timeout=STD_TIMEOUT)
