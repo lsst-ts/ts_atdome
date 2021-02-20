@@ -4,7 +4,7 @@ This configuration only affects single-package Sphinx documentation builds.
 """
 
 from documenteer.conf.pipelinespkg import *  # noqa
-import lsst.ts.salobj  # noqa
+import lsst.ts.ATDome  # noqa
 
 project = "ts_ATDome"
 html_theme_options["logotext"] = project  # noqa
