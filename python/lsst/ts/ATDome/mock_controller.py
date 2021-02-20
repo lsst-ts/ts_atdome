@@ -18,7 +18,7 @@
 #
 # You should have received a copy of the GNU General Public License
 
-__all__ = ["MockDomeController"]
+__all__ = ["INITIAL_AZIMUTH", "MockDomeController"]
 
 import asyncio
 import enum
@@ -27,8 +27,12 @@ import logging
 
 from lsst.ts import simactuators
 from lsst.ts import salobj
+from .enums import MoveCode
 
 logging.basicConfig()
+
+# Initial azimuth (deg)
+INITIAL_AZIMUTH = 285
 
 
 class Door(enum.Flag):
@@ -98,7 +102,9 @@ class MockDomeController:
         self.home_az_overshoot = home_az_overshoot
         self.home_az_vel = home_az_vel
         self.encoder_counts_per_360 = 4018143232
-        self.az_actuator = simactuators.CircularPointToPointActuator(speed=az_vel)
+        self.az_actuator = simactuators.CircularPointToPointActuator(
+            speed=az_vel, start_position=INITIAL_AZIMUTH
+        )
         self.az_move_timeout = 120
         self.watchdog_reset_time = 600
         self.dropout_timer = 5
@@ -278,31 +284,42 @@ class MockDomeController:
     def do_short_status(self):
         """Create short status as a list of strings."""
         curr_tai = salobj.current_tai()
-        move_code = 0
+        move_code = MoveCode(0)
         outputs = []
-        for door, name, closing_code in (
-            (Door.Main, "MAIN", 4),
-            (Door.Dropout, "DROP", 16),
+        for door, name, closing_code, opening_code in (
+            (
+                Door.Main,
+                "MAIN",
+                MoveCode.MAIN_DOOR_CLOSING,
+                MoveCode.MAIN_DOOR_OPENING,
+            ),
+            (
+                Door.Dropout,
+                "DROP",
+                MoveCode.DROPOUT_DOOR_CLOSING,
+                MoveCode.DROPOUT_DOOR_OPENING,
+            ),
         ):
+            state_str = "AJAR"
             actuator = self.door_actuators[door]
             current_position = actuator.position(curr_tai)
-            if actuator.moving(curr_tai):
-                if actuator.direction < 0:
-                    move_code += closing_code
-                else:
-                    move_code += 2 * closing_code
-            state_str = "AJAR"
-            if current_position == 0:
-                state_str = "CLOSED"
-            elif current_position == 100:
-                state_str = "OPEN"
+            current_velocity = actuator.velocity(curr_tai)
+            if current_velocity < 0:
+                move_code |= closing_code
+            elif current_velocity > 0:
+                move_code |= opening_code
+            else:
+                if current_position == 0:
+                    state_str = "CLOSED"
+                elif current_position == 100:
+                    state_str = "OPEN"
             outputs.append(f"{name} {state_str} {current_position:03.0f}")
         enabled_str = "ON" if self.auto_shutdown_enabled else "OFF"
         sensor_mask = 0
         if self.rain_detected:
-            sensor_mask += 1
+            sensor_mask |= 1
         if self.clouds_detected:
-            sensor_mask += 2
+            sensor_mask |= 2
         outputs.append(f"[{enabled_str}] {sensor_mask:02d}")
 
         az_moving = self.az_actuator.moving(curr_tai)
@@ -316,15 +333,15 @@ class MockDomeController:
             dir_code = "RL"
         if az_moving:
             if self.last_rot_right:
-                move_code += 1
+                move_code |= MoveCode.AZIMUTH_POSITIVE
             else:
-                move_code += 2
+                move_code |= MoveCode.AZIMUTH_NEGATIVE
         if self.homing:
-            move_code += 64
+            move_code |= MoveCode.AZIMUTH_HOMING
 
         if self.estop_active:
-            move_code += 128
-        outputs.append(f"{dir_code} {move_code:03d}")
+            move_code |= MoveCode.ESTOP
+        outputs.append(f"{dir_code} {move_code.value:03d}")
         return outputs
 
     def do_full_status(self):

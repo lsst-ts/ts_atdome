@@ -58,6 +58,11 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
         async with self.make_csc(
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
+            await self.assert_next_sample(
+                self.remote.evt_softwareVersions,
+                cscVersion=ATDome.__version__,
+                subsystemVersions="",
+            )
             mock_ctrl = self.csc.mock_ctrl
             await self.check_initial_shutter_events()
 
@@ -76,7 +81,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 dropoutDoorOpeningPercentage=0,
                 mainDoorOpeningPercentage=0,
             )
-            self.assertAlmostEqual(position.azimuthPosition, 0)
+            self.assertAlmostEqual(position.azimuthPosition, ATDome.INITIAL_AZIMUTH)
 
             ctrllr_settings = await self.assert_next_sample(
                 topic=self.remote.evt_settingsAppliedDomeController,
@@ -207,6 +212,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
             await self.check_initial_az_events()
+            await self.assert_next_sample(self.remote.evt_moveCode, code=0)
 
             # Set home azimuth near current position so homing goes quickly.
             curr_az = self.csc.mock_ctrl.az_actuator.position()
@@ -221,6 +227,10 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 commandedState=AzimuthCommandedState.HOME,
             )
             self.assertTrue(math.isnan(az_cmd_state.azimuth))
+            await self.assert_next_sample(
+                self.remote.evt_moveCode,
+                code=ATDome.MoveCode.AZIMUTH_NEGATIVE + ATDome.MoveCode.AZIMUTH_HOMING,
+            )
 
             await self.assert_next_sample(
                 topic=self.remote.evt_azimuthState,
@@ -252,6 +262,10 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             self.assertAlmostEqual(
                 self.csc.mock_ctrl.az_actuator.speed, self.csc.mock_ctrl.home_az_vel,
             )
+            await self.assert_next_sample(
+                self.remote.evt_moveCode,
+                code=ATDome.MoveCode.AZIMUTH_POSITIVE + ATDome.MoveCode.AZIMUTH_HOMING,
+            )
 
             # Wait for the slow CW homing move to finish.
             await self.assert_next_sample(
@@ -266,6 +280,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 topic=self.remote.tel_position, flush=True
             )
             self.assertAlmostEqual(position.azimuthPosition, home_azimuth)
+            await self.assert_next_sample(self.remote.evt_moveCode, code=0)
 
     def assert_angle_in_range(self, angle, min_angle, max_angle):
         """Assert that an angle is in the given range.
@@ -312,14 +327,21 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
             await self.check_initial_az_events()
+            await self.assert_next_sample(self.remote.evt_moveCode, code=0)
+
+            # Test an initial condition necessary for this test.
+            # If this fails then the first entry in
+            # `for desired_azimuth, ...` may need to be updated.
+            self.assertAlmostEqual(ATDome.INITIAL_AZIMUTH, 285)
 
             # Try several angles, including some not in the range [0, 360);
             # CW direction is towards larger azimuth.
             isFirst = True
             for desired_azimuth, desired_moving_state, min_angle, max_angle in (
-                (325.1, AzimuthState.MOVINGCCW, 325.1, 0),
-                (-1.2, AzimuthState.MOVINGCW, 325.1, 360 - 1.2),
-                (390.3, AzimuthState.MOVINGCW, 360 - 1.2, 390.3 - 360),
+                (325.1, AzimuthState.MOVINGCW, 285, 325.1),
+                (-1.2, AzimuthState.MOVINGCW, 325.1, -1.2 + 360),
+                (390.3, AzimuthState.MOVINGCW, -1.2 + 360, 390.3 - 360),
+                (-1.2, AzimuthState.MOVINGCCW, -1.2 + 360, 390.3 - 360),
             ):
                 wrapped_desired_azimuth = salobj.angle_wrap_nonnegative(
                     desired_azimuth
@@ -344,6 +366,15 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                     topic=self.remote.evt_azimuthState,
                     state=desired_moving_state,
                     homing=False,
+                )
+                if desired_moving_state == AzimuthState.MOVINGCW:
+                    desired_code = ATDome.MoveCode.AZIMUTH_POSITIVE
+                elif desired_moving_state == AzimuthState.MOVINGCCW:
+                    desired_code = ATDome.MoveCode.AZIMUTH_NEGATIVE
+                else:
+                    self.fail(f"Unsupported moving state {desired_moving_state}")
+                await self.assert_next_sample(
+                    self.remote.evt_moveCode, code=desired_code
                 )
 
                 # While the move occurs test that the position is in range
@@ -372,6 +403,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 await self.assert_next_sample(
                     topic=self.remote.evt_azimuthInPosition, inPosition=True,
                 )
+                await self.assert_next_sample(self.remote.evt_moveCode, code=0)
                 isFirst = False
 
             # Move the shutter to its current location (for speed)
@@ -397,6 +429,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
             await self.check_initial_shutter_events()
+            await self.assert_next_sample(self.remote.evt_moveCode, code=0)
 
             # Open both doors.
             await self.remote.cmd_openShutter.start(timeout=DOOR_TIMEOUT)
@@ -409,6 +442,11 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 dropout_door_state=ShutterDoorState.OPENING,
                 main_door_state=ShutterDoorState.OPENING,
             )
+            await self.assert_next_sample(
+                self.remote.evt_moveCode,
+                code=ATDome.MoveCode.MAIN_DOOR_OPENING
+                + ATDome.MoveCode.DROPOUT_DOOR_OPENING,
+            )
 
             # Check fully open events.
             await self.check_shutter_events(
@@ -416,6 +454,11 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 main_door_state=ShutterDoorState.OPENED,
                 shutter_in_position=True,
             )
+            # I'm not sure if one door will finish moving first,
+            # or if both will be reported as done at the same time.
+            self.remote.evt_moveCode.flush()
+            data = self.remote.evt_moveCode.get()
+            self.assertEqual(data.code, 0)
 
             # Close both doors.
             await self.remote.cmd_closeShutter.start(timeout=DOOR_TIMEOUT)
@@ -428,6 +471,11 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 main_door_state=ShutterDoorState.CLOSING,
                 shutter_in_position=False,
             )
+            await self.assert_next_sample(
+                self.remote.evt_moveCode,
+                code=ATDome.MoveCode.MAIN_DOOR_CLOSING
+                + ATDome.MoveCode.DROPOUT_DOOR_CLOSING,
+            )
 
             # Check fully closed events.
             await self.check_shutter_events(
@@ -435,6 +483,11 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 main_door_state=ShutterDoorState.CLOSED,
                 shutter_in_position=True,
             )
+            # Again I'm not sure which will close first,
+            # so don't check intermediate states.
+            self.remote.evt_moveCode.flush()
+            data = self.remote.evt_moveCode.get()
+            self.assertEqual(data.code, 0)
 
     async def test_move_individual_doors(self):
         """Test the commands that move individual shutter doors.
@@ -449,6 +502,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
             await self.check_initial_shutter_events()
+            await self.assert_next_sample(self.remote.evt_moveCode, code=0)
 
             # Check that we cannot open or close the dropout door
             # because the main door is not fully open.
@@ -475,6 +529,9 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 main_door_cmd_state=ShutterDoorCommandedState.OPENED,
                 main_door_state=ShutterDoorState.OPENING,
             )
+            await self.assert_next_sample(
+                self.remote.evt_moveCode, code=ATDome.MoveCode.MAIN_DOOR_OPENING,
+            )
 
             # Check that we cannot open or close the dropout door
             # because the main door is not fully open.
@@ -494,6 +551,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             # The dropout door has no commanded position,
             # so shutter_in_position remains False.
             await self.check_shutter_events(main_door_state=ShutterDoorState.OPENED)
+            await self.assert_next_sample(self.remote.evt_moveCode, code=0)
 
             # Open the main door again; this should be quick.
             await self.remote.cmd_moveShutterMainDoor.set_start(
@@ -518,6 +576,9 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 dropout_door_cmd_state=ShutterDoorCommandedState.OPENED,
                 dropout_door_state=ShutterDoorState.OPENING,
             )
+            await self.assert_next_sample(
+                self.remote.evt_moveCode, code=ATDome.MoveCode.DROPOUT_DOOR_OPENING,
+            )
 
             # Make sure we can't close the main door
             # while the dropout door is moving.
@@ -534,6 +595,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             await self.check_shutter_events(
                 dropout_door_state=ShutterDoorState.OPENED, shutter_in_position=True
             )
+            await self.assert_next_sample(self.remote.evt_moveCode, code=0)
 
             # Open the dropout door again; this should be quick.
             await self.remote.cmd_moveShutterDropoutDoor.set_start(
@@ -550,6 +612,9 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 self.remote.cmd_moveShutterMainDoor.set_start(
                     open=False, timeout=DOOR_TIMEOUT
                 )
+            )
+            await self.assert_next_sample(
+                self.remote.evt_moveCode, code=ATDome.MoveCode.MAIN_DOOR_CLOSING,
             )
 
             # Check main door closing status;
@@ -578,6 +643,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             await self.check_shutter_events(
                 main_door_state=ShutterDoorState.CLOSED, shutter_in_position=True
             )
+            await self.assert_next_sample(self.remote.evt_moveCode, code=0)
 
             # Close the main door again; this should be quick.
             await self.remote.cmd_moveShutterMainDoor.set_start(
@@ -601,12 +667,16 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 main_door_state=ShutterDoorState.OPENING,
                 shutter_in_position=False,
             )
+            await self.assert_next_sample(
+                self.remote.evt_moveCode, code=ATDome.MoveCode.MAIN_DOOR_OPENING,
+            )
 
             # Check main door fully opening status;
             # the dropout door is not moving so no dropout events output.
             await self.check_shutter_events(
                 main_door_state=ShutterDoorState.OPENED, shutter_in_position=True
             )
+            await self.assert_next_sample(self.remote.evt_moveCode, code=0)
 
             # Start closing the dropout door.
             dropout_close_task = asyncio.ensure_future(
@@ -621,6 +691,9 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 dropout_door_cmd_state=ShutterDoorCommandedState.CLOSED,
                 dropout_door_state=ShutterDoorState.CLOSING,
                 shutter_in_position=False,
+            )
+            await self.assert_next_sample(
+                self.remote.evt_moveCode, code=ATDome.MoveCode.DROPOUT_DOOR_CLOSING,
             )
 
             # Make sure we can't close the main door
@@ -637,6 +710,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             await self.check_shutter_events(
                 dropout_door_state=ShutterDoorState.CLOSED, shutter_in_position=True
             )
+            await self.assert_next_sample(self.remote.evt_moveCode, code=0)
 
             # Close the dropout door again; this should be quick.
             await self.remote.cmd_moveShutterDropoutDoor.set_start(
@@ -662,6 +736,9 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 main_door_state=ShutterDoorState.CLOSING,
                 shutter_in_position=False,
             )
+            await self.assert_next_sample(
+                self.remote.evt_moveCode, code=ATDome.MoveCode.MAIN_DOOR_CLOSING,
+            )
 
             # Check that we cannot open or close the dropout door
             # because the main door is not fully open.
@@ -681,6 +758,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             await self.check_shutter_events(
                 main_door_state=ShutterDoorState.CLOSED, shutter_in_position=True
             )
+            await self.assert_next_sample(self.remote.evt_moveCode, code=0)
 
     async def test_close_shutter_supersedes_open_shutter(self):
         """Test that closing the shutter supersedes opening the shutter.
@@ -699,8 +777,8 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             # shutter_in_position is still False, so not output.
             await self.check_shutter_events(
                 dropout_door_cmd_state=ShutterDoorCommandedState.OPENED,
-                dropout_door_state=ShutterDoorState.OPENING,
                 main_door_cmd_state=ShutterDoorCommandedState.OPENED,
+                dropout_door_state=ShutterDoorState.OPENING,
                 main_door_state=ShutterDoorState.OPENING,
             )
 
@@ -924,7 +1002,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
 
             # Move azimuth and start opening the shutter.
             await self.remote.cmd_moveAzimuth.set_start(
-                azimuth=354, timeout=STD_TIMEOUT
+                azimuth=ATDome.INITIAL_AZIMUTH - 10, timeout=STD_TIMEOUT
             )
             shutter_open_task = asyncio.ensure_future(
                 self.remote.cmd_openShutter.start(timeout=STD_TIMEOUT)
@@ -989,7 +1067,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
 
             # Move azimuth and start opening the shutter.
             await self.remote.cmd_moveAzimuth.set_start(
-                azimuth=354, timeout=STD_TIMEOUT
+                azimuth=ATDome.INITIAL_AZIMUTH - 10, timeout=STD_TIMEOUT
             )
             shutter_open_task = asyncio.ensure_future(
                 self.remote.cmd_openShutter.start(timeout=STD_TIMEOUT)
@@ -1010,6 +1088,10 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 dropout_door_state=ShutterDoorState.OPENING,
                 main_door_state=ShutterDoorState.OPENING,
             )
+
+            # Give the shutters a chance to move. This works around
+            # a race condition that Tiago reported.
+            await asyncio.sleep(0.1)
 
             # Stop all motion.
             # This should not produce new "inPosition" events, because
