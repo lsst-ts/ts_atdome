@@ -1,6 +1,6 @@
 # This file is part of ts_ATDome.
 #
-# Developed for the LSST Data Management System.
+# Developed for Vera C. Rubin Observatory Telescope and Site Systems.
 # This product includes software developed by the LSST Project
 # (https://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
@@ -23,7 +23,6 @@ __all__ = ["ATDomeCsc"]
 import asyncio
 import enum
 import math
-import pathlib
 
 from lsst.ts import salobj
 from lsst.ts.idl.enums.ATDome import (
@@ -33,6 +32,7 @@ from lsst.ts.idl.enums.ATDome import (
     ShutterDoorState,
 )
 from . import __version__
+from .config_schema import CONFIG_SCHEMA
 from .enums import MoveCode
 from .mock_controller import MockDomeController
 from .status import Status
@@ -93,13 +93,6 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         simulation_mode=0,
         mock_port=None,
     ):
-        schema_path = (
-            pathlib.Path(__file__)
-            .resolve()
-            .parents[4]
-            .joinpath("schema", "ATDome.yaml")
-        )
-
         self.reader = None
         self.writer = None
         self.move_code = 0
@@ -134,7 +127,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         super().__init__(
             "ATDome",
             index=0,
-            schema_path=schema_path,
+            config_schema=CONFIG_SCHEMA,
             config_dir=config_dir,
             initial_state=initial_state,
             simulation_mode=simulation_mode,
