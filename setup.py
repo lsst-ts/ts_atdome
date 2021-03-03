@@ -1,7 +1,4 @@
-import os
-import sys
 import setuptools
-import pathlib
 
 install_requires = []
 tests_require = ["pytest", "pytest-cov", "pytest-flake8", "asynctest"]
@@ -11,9 +8,6 @@ __all__ = ["__version__"]
 
 __version__ = "{version}"
 """
-tools_path = pathlib.PurePosixPath(setuptools.__path__[0])
-base_prefix = pathlib.PurePosixPath(sys.base_prefix)
-data_files_path = tools_path.relative_to(base_prefix).parents[1]
 
 setuptools.setup(
     name="ts_ATDome",
@@ -27,7 +21,6 @@ setuptools.setup(
     package_dir={"": "python"},
     packages=setuptools.find_namespace_packages(where="python"),
     package_data={"": ["*.rst", "*.yaml"]},
-    data_files=[(os.path.join(data_files_path, "schema"), ["schema/ATDome.yaml"])],
     scripts=["bin/run_atdome.py"],
     tests_require=tests_require,
     extras_require={"dev": dev_requires},
