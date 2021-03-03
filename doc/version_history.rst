@@ -6,6 +6,19 @@
 Version History
 ###############
 
+v1.5.0
+======
+
+* Store the CSC configuration schema in code.
+  This requires ts_salobj 6.3.
+
+Requires:
+
+* ts_salobj 6.3
+* ts_simactuators 2
+* ts_idl
+* IDL file for ATDome from ts_xml 7.2
+
 v1.4.0
 ======
 
