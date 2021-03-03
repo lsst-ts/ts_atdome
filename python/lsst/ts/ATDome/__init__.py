@@ -24,6 +24,7 @@ try:
 except ImportError:
     __version__ = "?"
 
+from .config_schema import *
 from .enums import *
 from .status import *
 from .dome_csc import *

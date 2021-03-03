@@ -20,24 +20,18 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import unittest
-import pathlib
 
 import jsonschema
-import yaml
 
 from lsst.ts import salobj
+from lsst.ts import ATDome
 
 
 class ValidationTestCase(unittest.TestCase):
     """Test validation of the config schema."""
 
     def setUp(self):
-        schemaname = "ATDome.yaml"
-        pkg_dir = pathlib.Path(__file__).parents[1]
-        schemapath = pkg_dir / "schema" / schemaname
-        with open(schemapath, "r") as f:
-            rawschema = f.read()
-        self.schema = yaml.safe_load(rawschema)
+        self.schema = ATDome.CONFIG_SCHEMA
         self.validator = salobj.DefaultingValidator(schema=self.schema)
         self.default = dict(
             host="192.168.223.14", port=17310, connection_timeout=10, read_timeout=10
