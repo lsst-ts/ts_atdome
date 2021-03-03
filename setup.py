@@ -1,6 +1,4 @@
-import sys
 import setuptools
-import pathlib
 
 install_requires = []
 tests_require = ["pytest", "pytest-cov", "pytest-flake8", "asynctest"]
@@ -10,9 +8,6 @@ __all__ = ["__version__"]
 
 __version__ = "{version}"
 """
-tools_path = pathlib.PurePosixPath(setuptools.__path__[0])
-base_prefix = pathlib.PurePosixPath(sys.base_prefix)
-data_files_path = tools_path.relative_to(base_prefix).parents[1]
 
 setuptools.setup(
     name="ts_ATDome",
