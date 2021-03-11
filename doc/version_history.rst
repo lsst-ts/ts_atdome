@@ -6,24 +6,13 @@
 Version History
 ###############
 
-v1.5.1
-======
-
-* Make test_csc.py more robust by changing assert_angle_in_range to test angle <= max_angle instead of <.
-  This avoids a race condition.
-
-Requires:
-
-* ts_salobj 6
-* ts_simactuators 2
-* ts_idl
-* IDL file for ATDome from ts_xml 7.2
-
 v1.5.0
 ======
 
 * Store the CSC configuration schema in code.
   This requires ts_salobj 6.3.
+* Make test_csc.py more robust by changing assert_angle_in_range to test angle <= max_angle instead of <.
+  This avoids a race condition.
 
 Requires:
 
