@@ -286,9 +286,13 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
         """Assert that an angle is in the given range.
 
         All arguments must be in range [0, 360) (and this is checked).
+        If min_angle > max_angle then the test is::
 
-        If max_angle < min_angle then the check is:
-        min_angle <= angle < 360 or 0 <= angle < max_angle
+            min_angle <= angle < 360 or 0 <= angle <= max_angle
+
+        otherwise the test is the obvious::
+
+            min_angle <= angle <= max_angle
 
         Parameters
         ----------
@@ -312,12 +316,12 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                     f"Argument {argname} = {argvalue} not in range [0, 360)"
                 )
         if min_angle > max_angle:
-            if not (min_angle <= angle < 360 or 0 <= angle < max_angle):
+            if not (min_angle <= angle < 360 or 0 <= angle <= max_angle):
                 raise AssertionError(
                     f"angle {angle} not in range [{min_angle}, 360) or [0, {max_angle}]"
                 )
         else:
-            if not (min_angle <= angle < max_angle):
+            if not (min_angle <= angle <= max_angle):
                 raise AssertionError(
                     f"angle {angle} not in range [{min_angle}, {max_angle}]"
                 )
