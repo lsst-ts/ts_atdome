@@ -19,12 +19,12 @@ Requires:
 * ts_salobj 6.3
 * ts_simactuators 2
 * ts_idl
-* IDL file for ATDome from ts_xml 7.2
+* IDL file for ATDome from ts_xml 8
 
 v1.4.0
 ======
 
-* `ATDomeCsc`: publish the new moveCode event. This requires ts_xml 7.2.
+* `ATDomeCsc`: publish the new moveCode event. This requires ts_xml 8.
 * `ATDomeCsc`: set class variable ``version`` and test that this properly sets the ``cscVersion`` field of the ``softwareVersions`` event.
 * `ATDomeCsc`: make the ``standby`` command more reliable by eliminating a race condition that could cause a fault.
 * `MoveCode`: make this a public class and update `MockDomeController` to use it.
@@ -37,7 +37,7 @@ Requires:
 * ts_salobj 6
 * ts_simactuators 2
 * ts_idl
-* IDL file for ATDome from ts_xml 7.2
+* IDL file for ATDome from ts_xml 8
 
 v1.3.4
 ======
