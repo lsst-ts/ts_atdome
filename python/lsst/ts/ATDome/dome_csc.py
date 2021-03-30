@@ -782,8 +782,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         )
 
     async def status_loop(self):
-        """Read and report status from the TCP/IP controller.
-        """
+        """Read and report status from the TCP/IP controller."""
         self.status_sleep_task.cancel()
         while self.connected:
             try:
@@ -806,8 +805,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         await self.disconnect()
 
     async def stop_mock_ctrl(self):
-        """Stop the mock controller, if running.
-        """
+        """Stop the mock controller, if running."""
         mock_ctrl = self.mock_ctrl
         self.mock_ctrl = None
         if mock_ctrl:

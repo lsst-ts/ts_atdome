@@ -6,6 +6,18 @@
 Version History
 ###############
 
+v1.5.2
+======
+
+* Reformat the code with black 20.8b1
+
+Requires:
+
+* ts_salobj 6.3
+* ts_simactuators 2
+* ts_idl
+* IDL file for ATDome from ts_xml 8
+
 v1.5.1
 ======
 
