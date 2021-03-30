@@ -191,8 +191,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 self.assertEqual(getattr(self.csc.config, field), value)
 
     async def test_command_failures(self):
-        """Test what happens when the mock controller fails a command.
-        """
+        """Test what happens when the mock controller fails a command."""
         async with self.make_csc(
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
@@ -260,7 +259,8 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 homing=True,
             )
             self.assertAlmostEqual(
-                self.csc.mock_ctrl.az_actuator.speed, self.csc.mock_ctrl.home_az_vel,
+                self.csc.mock_ctrl.az_actuator.speed,
+                self.csc.mock_ctrl.home_az_vel,
             )
             await self.assert_next_sample(
                 self.remote.evt_moveCode,
@@ -355,7 +355,8 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 )
                 if not isFirst:
                     await self.assert_next_sample(
-                        topic=self.remote.evt_azimuthInPosition, inPosition=False,
+                        topic=self.remote.evt_azimuthInPosition,
+                        inPosition=False,
                     )
 
                 # Wait for the move to begin and check status.
@@ -405,7 +406,8 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 )
 
                 await self.assert_next_sample(
-                    topic=self.remote.evt_azimuthInPosition, inPosition=True,
+                    topic=self.remote.evt_azimuthInPosition,
+                    inPosition=True,
                 )
                 await self.assert_next_sample(self.remote.evt_moveCode, code=0)
                 isFirst = False
@@ -427,8 +429,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             )
 
     async def test_move_shutter(self):
-        """Test openShutter and closeShutter commands.
-        """
+        """Test openShutter and closeShutter commands."""
         async with self.make_csc(
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
@@ -534,7 +535,8 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 main_door_state=ShutterDoorState.OPENING,
             )
             await self.assert_next_sample(
-                self.remote.evt_moveCode, code=ATDome.MoveCode.MAIN_DOOR_OPENING,
+                self.remote.evt_moveCode,
+                code=ATDome.MoveCode.MAIN_DOOR_OPENING,
             )
 
             # Check that we cannot open or close the dropout door
@@ -581,7 +583,8 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 dropout_door_state=ShutterDoorState.OPENING,
             )
             await self.assert_next_sample(
-                self.remote.evt_moveCode, code=ATDome.MoveCode.DROPOUT_DOOR_OPENING,
+                self.remote.evt_moveCode,
+                code=ATDome.MoveCode.DROPOUT_DOOR_OPENING,
             )
 
             # Make sure we can't close the main door
@@ -618,7 +621,8 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 )
             )
             await self.assert_next_sample(
-                self.remote.evt_moveCode, code=ATDome.MoveCode.MAIN_DOOR_CLOSING,
+                self.remote.evt_moveCode,
+                code=ATDome.MoveCode.MAIN_DOOR_CLOSING,
             )
 
             # Check main door closing status;
@@ -672,7 +676,8 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 shutter_in_position=False,
             )
             await self.assert_next_sample(
-                self.remote.evt_moveCode, code=ATDome.MoveCode.MAIN_DOOR_OPENING,
+                self.remote.evt_moveCode,
+                code=ATDome.MoveCode.MAIN_DOOR_OPENING,
             )
 
             # Check main door fully opening status;
@@ -697,7 +702,8 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 shutter_in_position=False,
             )
             await self.assert_next_sample(
-                self.remote.evt_moveCode, code=ATDome.MoveCode.DROPOUT_DOOR_CLOSING,
+                self.remote.evt_moveCode,
+                code=ATDome.MoveCode.DROPOUT_DOOR_CLOSING,
             )
 
             # Make sure we can't close the main door
@@ -741,7 +747,8 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
                 shutter_in_position=False,
             )
             await self.assert_next_sample(
-                self.remote.evt_moveCode, code=ATDome.MoveCode.MAIN_DOOR_CLOSING,
+                self.remote.evt_moveCode,
+                code=ATDome.MoveCode.MAIN_DOOR_CLOSING,
             )
 
             # Check that we cannot open or close the dropout door
@@ -765,8 +772,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             await self.assert_next_sample(self.remote.evt_moveCode, code=0)
 
     async def test_close_shutter_supersedes_open_shutter(self):
-        """Test that closing the shutter supersedes opening the shutter.
-        """
+        """Test that closing the shutter supersedes opening the shutter."""
         async with self.make_csc(
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
@@ -813,8 +819,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             )
 
     async def test_open_shutter_supersedes_move_dropout(self):
-        """Test that opening the shutter supersedes moving the dropout door.
-        """
+        """Test that opening the shutter supersedes moving the dropout door."""
         async with self.make_csc(
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
@@ -880,8 +885,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             )
 
     async def test_close_shutter_supersedes_move_main(self):
-        """Test that closing the shutter supersedes moving the main door.
-        """
+        """Test that closing the shutter supersedes moving the main door."""
         async with self.make_csc(
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
@@ -927,8 +931,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             )
 
     async def test_open_shutter_supersedes_close_shutter(self):
-        """Test that opening the shutter supersedes closing the shutter.
-        """
+        """Test that opening the shutter supersedes closing the shutter."""
         async with self.make_csc(
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
@@ -1149,8 +1152,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             )
 
     async def check_initial_az_events(self):
-        """Read and check initial azimuthCommandedState and azimuthState.
-        """
+        """Read and check initial azimuthCommandedState and azimuthState."""
         az_cmd_state = await self.assert_next_sample(
             topic=self.remote.evt_azimuthCommandedState,
             commandedState=AzimuthCommandedState.UNKNOWN,
@@ -1164,7 +1166,8 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
         )
 
         await self.assert_next_sample(
-            topic=self.remote.evt_azimuthInPosition, inPosition=False,
+            topic=self.remote.evt_azimuthInPosition,
+            inPosition=False,
         )
 
     async def check_initial_shutter_events(self):

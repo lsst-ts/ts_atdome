@@ -56,8 +56,7 @@ def parse_get(regex, line):
 
 
 class Status:
-    """Parsed data of the output from "+", the full status command.
-    """
+    """Parsed data of the output from "+", the full status command."""
 
     def __init__(self, lines):
         if len(lines) != 25:

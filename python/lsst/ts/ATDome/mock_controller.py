@@ -176,8 +176,7 @@ class MockDomeController:
             self.port = self.server.sockets[0].getsockname()[1]
 
     async def stop(self, timeout=5):
-        """Stop the TCP/IP server.
-        """
+        """Stop the TCP/IP server."""
         if self.server is None:
             return
 
@@ -263,8 +262,7 @@ class MockDomeController:
                 yield door
 
     def do_home(self):
-        """Rotate azimuth to the home position.
-        """
+        """Rotate azimuth to the home position."""
         self._homing_task.cancel()
         self._homing_task = asyncio.ensure_future(self.implement_home())
 

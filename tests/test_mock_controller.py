@@ -28,8 +28,7 @@ from lsst.ts import ATDome
 
 
 class MockTestCase(asynctest.TestCase):
-    """Test MockDomeController, Status and LongStatus
-    """
+    """Test MockDomeController, Status and LongStatus"""
 
     async def setUp(self):
         self.ctrl = None
