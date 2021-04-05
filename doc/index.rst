@@ -39,14 +39,29 @@ Stop the CSC by sending it to the OFFLINE state.
 
 See ATDome `SAL communication interface <https://ts-xml.lsst.io/sal_interfaces/ATDome.html>`_ for commands, events and telemetry.
 
-For on-sky observing, send the `ATDomeTrajectory CSC <https://ts-atdometrajectory.lsst.io/>`_ to the ENABLED state. Then ``ATDomeTrajectory`` will automatically command ``ATDome`` azimuth to follow the telescope.
-When you want to command ``ATDome`` azimuth manually, send ``ATDomeTrajectory`` to the DISABLED state to prevent it from commanding ``ATDome``.
+For on-sky observing: enable ATDomeTrajectory azimuth following by issuing the ATDomeTrajectory `setEnabledMode`_ command command with ``enabled=True``.
+ATDomeTrajectory will automatically command ATDome to follow the telescope azimuth.
 
-The ``moveAzimuth`` command is reported as done as soon as the command is received; use the ``azimuthState`` event to track when the move finishes.
+To move the dome manually in azimuth: first disable ATDomeTrajectory azimuth following by issuing the ATDomeTrajectory `setEnabledMode`_ command command with ``enabled=False``.
+Then issue the ATDome `moveAzimuth`_ command to move the dome.
+
+The `moveAzimuth`_ command is reported as done as soon as the command is received;
+use the `azimuthState`_ event to track when the move actually finishes.
+
 The door commands are reported done when the doors have finished moving.
 
-New commands may be sent at any time.
+The `homeAzimuth`_ command is reported done when homing has finished.
+The low-level controller does not report whether the azimuth axis has been homed,
+so the CSC only knows the dome has been homed if you run the `homeAzimuth`_ command.
+Thus it will log a warning if issue the `moveAzimuth`_ command before the CSC has homed the dome, but still allow the motion.
+
+New commands may be sent at any time, though `moveAzimuth`_ and `homeAzimuth`_ will be rejected while homing azimuth.
 If a new door command arrives while the door is moving, the door immediately starts moving to the new position and the old door command is reported as superseded.
+
+.. _homeAzimuth: https://ts-xml.lsst.io/sal_interfaces/ATDome.html#homeazimuth
+.. _moveAzimuth: https://ts-xml.lsst.io/sal_interfaces/ATDome.html#moveazimuth
+.. _azimuthState: https://ts-xml.lsst.io/sal_interfaces/ATDome.html#azimuthstate
+.. _setEnabledMode: https://ts-xml.lsst.io/sal_interfaces/ATDomeTrajectory.html#setenabledmode
 
 .. _lsst.ts.ATDome.configuration:
 

@@ -37,7 +37,8 @@ from .enums import MoveCode
 from .mock_controller import MockDomeController
 from .status import Status
 
-_LOCAL_HOST = "127.0.0.1"
+# Max time to home the azimuth (sec)
+HOME_AZIMUTH_TIMEOUT = 150
 
 
 class Axis(enum.Flag):
@@ -98,13 +99,17 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.move_code = 0
         self.mock_ctrl = None  # mock controller, or None of not constructed
         self.status_interval = 0.2  # delay between short status commands (sec)
+
         # Amount to add to "tolerance" reported by the low-level controller
         # to set az_tolarance (deg).
         self.az_tolerance_margin = 0.5
+
         # Tolerance for "in position" (deg).
         # Set the initial value here, then update from the
         # "Tolerance" reported in long status.
         self.az_tolerance = 1.5
+        self.homing = False
+
         # Task for sleeping in the status loop; cancel this to trigger
         # an immediate status update. Warning: do not cancel status_task
         # because that may be waiting for TCP/IP communication.
@@ -124,6 +129,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.cmd_lock = asyncio.Lock()
         self.config = None
         self.mock_port = mock_port
+        self.status_event = asyncio.Event()
         super().__init__(
             "ATDome",
             index=0,
@@ -133,11 +139,21 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             simulation_mode=simulation_mode,
         )
 
+        # Homing can be slow; rather than queue up these commands
+        # (which is unlikely to be what the user wants) allow multiple
+        # command to run, so the CSC can reject the overlapping commands.
+        self.cmd_homeAzimuth.allow_multiple_callbacks = True
+        # Set but don't put azimuthState.homed=False: only homed is maintained
+        # locally; we have no idea of the rest of the state.
+        self.evt_azimuthState.set(homed=False)
+
     async def do_moveAzimuth(self, data):
         """Implement the ``moveAzimuth`` command."""
-        self.assert_enabled("moveAzimuth")
+        self.assert_enabled()
         if self.evt_azimuthState.data.homing:
             raise salobj.ExpectedError("Cannot move azimuth while homing")
+        if not self.evt_azimuthState.data.homed:
+            self.log.warning("The azimuth axis may not be homed.")
         azimuth = salobj.angle_wrap_nonnegative(data.azimuth).deg
         await self.run_command(f"{azimuth:0.3f} MV")
         self.evt_azimuthCommandedState.set_put(
@@ -149,7 +165,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
     async def do_closeShutter(self, data):
         """Implement the ``closeShutter`` command."""
-        self.assert_enabled("closeShutter")
+        self.assert_enabled()
         self.shutter_task.cancel()
         await self.run_command("SC")
         self.evt_dropoutDoorCommandedState.set_put(
@@ -164,7 +180,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
     async def do_openShutter(self, data):
         """Implement the ``openShutter`` command."""
-        self.assert_enabled("openShutter")
+        self.assert_enabled()
         await self.run_command("SO")
         self.evt_dropoutDoorCommandedState.set_put(
             commandedState=ShutterDoorCommandedState.OPENED, force_output=True
@@ -178,7 +194,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
     async def do_stopMotion(self, data):
         """Implement the ``stopMotion`` command."""
-        self.assert_enabled("stopMotion")
+        self.assert_enabled()
         self.evt_azimuthCommandedState.set_put(
             commandedState=AzimuthCommandedState.STOP, force_output=True
         )
@@ -194,20 +210,56 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
     async def do_homeAzimuth(self, data):
         """Implement the ``homeAzimuth`` command."""
-        self.assert_enabled("homeAzimuth")
-        if self.evt_azimuthState.data.homing:
+        self.assert_enabled()
+        put_final_azimuth_commanded_state = False
+        if self.evt_azimuthState.data.homing or self.homing:
             raise salobj.ExpectedError("Already homing")
-        self.evt_azimuthCommandedState.set_put(
-            commandedState=AzimuthCommandedState.HOME,
-            azimuth=math.nan,
-            force_output=True,
-        )
-        await self.run_command("HM")
-        self.status_sleep_task.cancel()
+        try:
+            self.homing = True
+
+            await self.wait_n_status(n=2)
+            if bool(self.evt_moveCode.data.code & MoveCode.AZIMUTH_HOMING):
+                raise salobj.ExpectedError("Already homing")
+            if not self.evt_azimuthState.data.state == AzimuthState.NOTINMOTION:
+                raise salobj.ExpectedError("Azimuth is moving")
+
+            # Homing is allowed; do it!
+            self.cmd_homeAzimuth.ack_in_progress(
+                data=data, timeout=HOME_AZIMUTH_TIMEOUT
+            )
+            self.evt_azimuthCommandedState.set_put(
+                commandedState=AzimuthCommandedState.HOME,
+                azimuth=math.nan,
+                force_output=True,
+            )
+            put_final_azimuth_commanded_state = True
+            await self.run_command("HM")
+            self.status_sleep_task.cancel()
+            # Check status until move code is no longer homing.
+            # Skip one status to start with.
+            n_to_await = 2
+            while self.homing:
+                await self.wait_n_status(n=n_to_await)
+                n_to_await = 1
+                # Do not use self.evt_azimuthState.data.homing because
+                # it includes self.homing, which we have set true.
+                self.homing = bool(
+                    self.evt_moveCode.data.code & MoveCode.AZIMUTH_HOMING
+                )
+            self.evt_azimuthState.set_put(homed=True, homing=False, force_output=True)
+        except Exception:
+            self.log.exception("homing failed")
+        finally:
+            self.homing = False
+            if put_final_azimuth_commanded_state:
+                self.evt_azimuthCommandedState.set_put(
+                    commandedState=AzimuthCommandedState.STOP,
+                    force_output=True,
+                )
 
     async def do_moveShutterDropoutDoor(self, data):
         """Implement the ``moveShutterDropoutDoor`` command."""
-        self.assert_enabled("moveShutterDropoutDoor")
+        self.assert_enabled()
         if self.evt_mainDoorState.data.state != ShutterDoorState.OPENED:
             raise salobj.ExpectedError(
                 "Cannot move the dropout door until the main door is fully open."
@@ -232,7 +284,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
     async def do_moveShutterMainDoor(self, data):
         """Implement the ``moveShutterMainDoor`` command."""
-        self.assert_enabled("moveShutterMainDoor")
+        self.assert_enabled()
         if data.open:
             self.evt_mainDoorCommandedState.set_put(
                 commandedState=ShutterDoorCommandedState.OPENED, force_output=True
@@ -493,10 +545,10 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             raise RuntimeError("Not yet configured")
         if self.connected:
             raise RuntimeError("Already connected")
-        host = _LOCAL_HOST if self.simulation_mode == 1 else self.config.host
+        host = salobj.LOCAL_HOST if self.simulation_mode == 1 else self.config.host
         if self.simulation_mode == 1:
             await self.start_mock_ctrl()
-            host = _LOCAL_HOST
+            host = salobj.LOCAL_HOST
         else:
             host = self.config.host
         try:
@@ -597,6 +649,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 self.status_task, timeout=self.config.read_timeout * 2
             )
         await self.stop_mock_ctrl()
+        self.evt_azimuthState.set_put(homed=False)
 
     def handle_status(self, lines):
         """Handle output of "?" command.
@@ -633,7 +686,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.evt_moveCode.set_put(code=move_code)
         self.evt_azimuthState.set_put(
             state=self.compute_az_state(move_code),
-            homing=bool(move_code & MoveCode.AZIMUTH_HOMING),
+            homing=bool(move_code & MoveCode.AZIMUTH_HOMING) or self.homing,
+            homeSwitch=status.az_home_switch,
         )
 
         dropout_door_state = self.compute_door_state(
@@ -705,6 +759,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         )
 
         self.az_tolerance = status.tolerance + self.az_tolerance_margin
+
+        self.status_event.set()
 
     async def wait_for_shutter(self, *, dropout_state, main_state):
         """Wait for the shutter doors to move to a specified position.
@@ -810,3 +866,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.mock_ctrl = None
         if mock_ctrl:
             await mock_ctrl.stop()
+
+    async def wait_n_status(self, n=2):
+        """Wait for the specified number of status."""
+        for i in range(n):
+            self.status_event.clear()
+            await self.status_event.wait()

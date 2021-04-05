@@ -21,16 +21,14 @@
 import asyncio
 import unittest
 
-import asynctest
-
 from lsst.ts import salobj
 from lsst.ts import ATDome
 
 
-class MockTestCase(asynctest.TestCase):
+class MockTestCase(unittest.IsolatedAsyncioTestCase):
     """Test MockDomeController, Status and LongStatus"""
 
-    async def setUp(self):
+    async def asyncSetUp(self):
         self.ctrl = None
         self.writer = None
 
@@ -44,7 +42,7 @@ class MockTestCase(asynctest.TestCase):
         read_str = read_bytes.decode().strip()
         self.assertEqual(read_str, "ACE Main Box\n>")
 
-    async def tearDown(self):
+    async def asyncTearDown(self):
         if self.ctrl:
             await asyncio.wait_for(self.ctrl.stop(), 5)
         if self.writer:
@@ -139,7 +137,7 @@ class MockTestCase(asynctest.TestCase):
         daz = -2
         est_ccw_duration = abs(daz / self.ctrl.az_vel)
         curr_az = self.ctrl.az_actuator.position(salobj.current_tai())
-        home_azimuth = salobj.angle_wrap_nonnegative(curr_az - 2).deg
+        home_azimuth = salobj.angle_wrap_nonnegative(curr_az + daz).deg
         self.ctrl.home_az = home_azimuth
 
         reply_lines = await self.send_cmd("HM")
@@ -170,6 +168,47 @@ class MockTestCase(asynctest.TestCase):
         self.assertAlmostEqual(
             self.ctrl.az_actuator.position(salobj.current_tai()), self.ctrl.home_az
         )
+
+    async def test_az_home_switch(self):
+        daz = -2
+        curr_az = self.ctrl.az_actuator.position(salobj.current_tai())
+        self.ctrl.home_az = salobj.angle_wrap_nonnegative(curr_az + daz).deg
+
+        # Move to left edge, center, and right edge of home switch
+        # and assert on the home switch each time.
+        for az in (
+            self.ctrl.home_az - self.ctrl.home_az_tolerance + 0.01,
+            self.ctrl.home_az + self.ctrl.home_az_tolerance - 0.01,
+            self.ctrl.home_az,
+        ):
+            reply_lines = await self.send_cmd(f"{az:0.2f} MV")
+            self.assertEqual(reply_lines, [""])
+
+            # Sleep until motion finished, then check status.
+            # Wait a bit extra for Docker macOS clock non-monotonicity.
+            await asyncio.sleep(self.ctrl.az_actuator.remaining_time() + 0.2)
+            reply_lines = await self.send_cmd("+")
+            status = ATDome.Status(reply_lines)
+            self.assertEqual(status.move_code, 0)
+            self.assertAlmostEqual(status.az_pos, az)
+            self.assertTrue(status.az_home_switch)
+
+        # Move just off of the az switch in both directions
+        for az in (
+            self.ctrl.home_az - self.ctrl.home_az_tolerance - 0.01,
+            self.ctrl.home_az + self.ctrl.home_az_tolerance + 0.01,
+        ):
+            reply_lines = await self.send_cmd(f"{az:0.2f} MV")
+            self.assertEqual(reply_lines, [""])
+
+            # Sleep until motion finished, then check status.
+            # Wait a bit extra for Docker macOS clock non-monotonicity.
+            await asyncio.sleep(self.ctrl.az_actuator.remaining_time() + 0.2)
+            reply_lines = await self.send_cmd("+")
+            status = ATDome.Status(reply_lines)
+            self.assertEqual(status.move_code, 0)
+            self.assertAlmostEqual(status.az_pos, az)
+            self.assertFalse(status.az_home_switch)
 
     async def test_main_door(self):
         est_duration = self.ctrl.door_time
