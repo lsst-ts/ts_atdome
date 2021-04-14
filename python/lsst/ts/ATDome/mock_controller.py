@@ -101,6 +101,9 @@ class MockDomeController:
         self.home_az = home_az
         self.home_az_overshoot = home_az_overshoot
         self.home_az_vel = home_az_vel
+        # Maximum az - home_az (deg) for which to report
+        # being on the home switch
+        self.home_az_tolerance = 0.2
         self.encoder_counts_per_360 = 4018143232
         self.az_actuator = simactuators.CircularPointToPointActuator(
             speed=az_vel, start_position=INITIAL_AZIMUTH
@@ -322,7 +325,11 @@ class MockDomeController:
 
         az_moving = self.az_actuator.moving(curr_tai)
         curr_az = self.az_actuator.position(curr_tai)
-        outputs.append(f"POSN {curr_az:0.2f}")
+        if abs(curr_az - self.home_az) < self.home_az_tolerance:
+            az_str = "HOME"
+        else:
+            az_str = "POSN"
+        outputs.append(f"{az_str} {curr_az:0.2f}")
         if self.last_rot_right is None:
             dir_code = "--"
         elif self.last_rot_right:

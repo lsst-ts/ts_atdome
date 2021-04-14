@@ -70,7 +70,9 @@ class Status:
         self.auto_shutdown_enabled = auto_shutdown_match.group(1) == "ON"
         self.sensor_code = int(auto_shutdown_match.group(2))
 
-        self.az_pos = float(parse_get(r"(?:POSN|HOME) +(\d*\.?\d+)", lines[3]))
+        az_pos_match = parse(r"(POSN|HOME) +(\d*\.?\d+)", lines[3])
+        self.az_home_switch = az_pos_match.group(1) == "HOME"
+        self.az_pos = float(az_pos_match.group(2))
 
         self.move_code = int(parse_get(r"(?:RL|RR|--) +(\d+)", lines[4]))
 

@@ -6,6 +6,29 @@
 Version History
 ###############
 
+v1.6.0
+======
+
+* `DomeCsc`: overhaul azimuth homing:
+
+    * Output new azimuthState event fields ``homed`` and ``homeSwitch``.
+      This requires ts_xml 9.
+    * Make the ``homeAzimuth`` command report wait until homing is finished,
+      and provide an CMD_INPROGRESS acknowledgement with a pessimistic time estimate when it starts.
+    * Make ``moveAzimuth`` and ``homeAzimuth`` fail while homing.
+    * Log a warning if you call ``moveAzimuth`` when the dome is not homed
+      (as far as the CSC knows; this information is not yet available from the low-level controller).
+* Update the User Guide to fix outdated information about ATDomeTrajectory
+  and add links to the ts_xml documentation for all commands and events mentioned in the guide.
+* Update tests to use `unittest.IsolatedAsyncioTestCase` instead of the abandoned asynctest package.
+
+Requires:
+
+* ts_salobj 6.3
+* ts_simactuators 2
+* ts_idl
+* IDL file for ATDome from ts_xml 9
+
 v1.5.2
 ======
 
