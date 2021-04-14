@@ -11,6 +11,8 @@ v1.6.0
 
 * `DomeCsc`: overhaul azimuth homing:
 
+    * Output new azimuthState event fields ``homed`` and ``homeSwitch``.
+      This requires ts_xml 9.
     * Make the ``homeAzimuth`` command report wait until homing is finished,
       and provide an CMD_INPROGRESS acknowledgement with a pessimistic time estimate when it starts.
     * Make ``moveAzimuth`` and ``homeAzimuth`` fail while homing.
@@ -25,7 +27,7 @@ Requires:
 * ts_salobj 6.3
 * ts_simactuators 2
 * ts_idl
-* IDL file for ATDome from ts_xml 8
+* IDL file for ATDome from ts_xml 9
 
 v1.5.2
 ======
