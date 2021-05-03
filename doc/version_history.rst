@@ -6,6 +6,18 @@
 Version History
 ###############
 
+v1.6.1
+======
+
+* Remove ``asynctest`` from setup.py
+
+Requires:
+
+* ts_salobj 6.3
+* ts_simactuators 2
+* ts_idl
+* IDL file for ATDome from ts_xml 9
+
 v1.6.0
 ======
 
