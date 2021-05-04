@@ -6,6 +6,7 @@ config.log
 *.so
 *.cfgc
 *.pyc
+.vscode
 ospl-*.log
 
 # Built by sconsUtils
