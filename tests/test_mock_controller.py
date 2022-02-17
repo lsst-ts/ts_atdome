@@ -21,7 +21,7 @@
 import asyncio
 import unittest
 
-from lsst.ts import salobj
+from lsst.ts import utils
 from lsst.ts import ATDome
 
 
@@ -136,8 +136,8 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_home_az(self):
         daz = -2
         est_ccw_duration = abs(daz / self.ctrl.az_vel)
-        curr_az = self.ctrl.az_actuator.position(salobj.current_tai())
-        home_azimuth = salobj.angle_wrap_nonnegative(curr_az + daz).deg
+        curr_az = self.ctrl.az_actuator.position(utils.current_tai())
+        home_azimuth = utils.angle_wrap_nonnegative(curr_az + daz).deg
         self.ctrl.home_az = home_azimuth
 
         reply_lines = await self.send_cmd("HM")
@@ -166,13 +166,13 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status.move_code, 0)
         self.assertAlmostEqual(self.ctrl.az_actuator.speed, self.ctrl.az_vel)
         self.assertAlmostEqual(
-            self.ctrl.az_actuator.position(salobj.current_tai()), self.ctrl.home_az
+            self.ctrl.az_actuator.position(utils.current_tai()), self.ctrl.home_az
         )
 
     async def test_az_home_switch(self):
         daz = -2
-        curr_az = self.ctrl.az_actuator.position(salobj.current_tai())
-        self.ctrl.home_az = salobj.angle_wrap_nonnegative(curr_az + daz).deg
+        curr_az = self.ctrl.az_actuator.position(utils.current_tai())
+        self.ctrl.home_az = utils.angle_wrap_nonnegative(curr_az + daz).deg
 
         # Move to left edge, center, and right edge of home switch
         # and assert on the home switch each time.

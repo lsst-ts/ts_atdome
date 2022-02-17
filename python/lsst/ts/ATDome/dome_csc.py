@@ -25,6 +25,7 @@ import enum
 import math
 
 from lsst.ts import salobj
+from lsst.ts import utils
 from lsst.ts.idl.enums.ATDome import (
     AzimuthCommandedState,
     AzimuthState,
@@ -113,14 +114,14 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         # Task for sleeping in the status loop; cancel this to trigger
         # an immediate status update. Warning: do not cancel status_task
         # because that may be waiting for TCP/IP communication.
-        self.status_sleep_task = salobj.make_done_future()
+        self.status_sleep_task = utils.make_done_future()
         # Task for the status loop. To trigger new status cancel
         # status_sleep_task, not status_task.
-        self.status_task = salobj.make_done_future()
+        self.status_task = utils.make_done_future()
         # Task that waits while connecting to the TCP/IP controller.
-        self.connect_task = salobj.make_done_future()
+        self.connect_task = utils.make_done_future()
         # Task that waits while shutter doors move
-        self.shutter_task = salobj.make_done_future()
+        self.shutter_task = utils.make_done_future()
         # The conditions that self.shutter_task is waiting for.
         # Must be one of: ShutterDoorState.OPENED,
         # ShutterDoorState.CLOSED or None (for don't care)
@@ -154,7 +155,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             raise salobj.ExpectedError("Cannot move azimuth while homing")
         if not self.evt_azimuthState.data.homed:
             self.log.warning("The azimuth axis may not be homed.")
-        azimuth = salobj.angle_wrap_nonnegative(data.azimuth).deg
+        azimuth = utils.angle_wrap_nonnegative(data.azimuth).deg
         await self.run_command(f"{azimuth:0.3f} MV")
         self.evt_azimuthCommandedState.set_put(
             commandedState=AzimuthCommandedState.GOTOPOSITION,
@@ -401,7 +402,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             and self.evt_azimuthCommandedState.data.commandedState
             == AzimuthCommandedState.GOTOPOSITION
         ):
-            daz = salobj.angle_diff(
+            daz = utils.angle_diff(
                 self.tel_position.data.azimuthPosition,
                 self.evt_azimuthCommandedState.data.azimuth,
             ).deg
