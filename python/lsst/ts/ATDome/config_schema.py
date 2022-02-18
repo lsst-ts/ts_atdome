@@ -27,7 +27,7 @@ CONFIG_SCHEMA = yaml.safe_load(
 $schema: http://json-schema.org/draft-07/schema#
 $id: https://github.com/lsst-ts/ts_ATDome/blob/master/python/lsst/ts/ATDome/schema_config.py
 # title must end with one or more spaces followed by the schema version, which must begin with "v"
-title: ATDome v1
+title: ATDome v2
 description: Schema for ATDome configuration files
 type: object
 properties:
@@ -35,21 +35,17 @@ properties:
     description: IP address of the TCP/IP interface
     type: string
     format: hostname
-    default: "192.168.223.14"
   port:
     description: Port number of the TCP/IP interface
     type: integer
-    default: 17310
   connection_timeout:
     description: Time limit for connecting to the TCP/IP interface (sec)
     type: number
     exclusiveMinimum: 0
-    default: 10
   read_timeout:
     description: Time limit for reading data from the TCP/IP interface (sec)
     type: number
     exclusiveMinimum: 0
-    default: 10
 required:
   - host
   - port

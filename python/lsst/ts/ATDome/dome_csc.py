@@ -157,7 +157,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             self.log.warning("The azimuth axis may not be homed.")
         azimuth = utils.angle_wrap_nonnegative(data.azimuth).deg
         await self.run_command(f"{azimuth:0.3f} MV")
-        self.evt_azimuthCommandedState.set_put(
+        await self.evt_azimuthCommandedState.set_write(
             commandedState=AzimuthCommandedState.GOTOPOSITION,
             azimuth=azimuth,
             force_output=True,
@@ -169,10 +169,10 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.assert_enabled()
         self.shutter_task.cancel()
         await self.run_command("SC")
-        self.evt_dropoutDoorCommandedState.set_put(
+        await self.evt_dropoutDoorCommandedState.set_write(
             commandedState=ShutterDoorCommandedState.CLOSED, force_output=True
         )
-        self.evt_mainDoorCommandedState.set_put(
+        await self.evt_mainDoorCommandedState.set_write(
             commandedState=ShutterDoorCommandedState.CLOSED, force_output=True
         )
         await self.wait_for_shutter(
@@ -183,10 +183,10 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         """Implement the ``openShutter`` command."""
         self.assert_enabled()
         await self.run_command("SO")
-        self.evt_dropoutDoorCommandedState.set_put(
+        await self.evt_dropoutDoorCommandedState.set_write(
             commandedState=ShutterDoorCommandedState.OPENED, force_output=True
         )
-        self.evt_mainDoorCommandedState.set_put(
+        await self.evt_mainDoorCommandedState.set_write(
             commandedState=ShutterDoorCommandedState.OPENED, force_output=True
         )
         await self.wait_for_shutter(
@@ -196,13 +196,13 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     async def do_stopMotion(self, data):
         """Implement the ``stopMotion`` command."""
         self.assert_enabled()
-        self.evt_azimuthCommandedState.set_put(
+        await self.evt_azimuthCommandedState.set_write(
             commandedState=AzimuthCommandedState.STOP, force_output=True
         )
-        self.evt_dropoutDoorCommandedState.set_put(
+        await self.evt_dropoutDoorCommandedState.set_write(
             commandedState=ShutterDoorCommandedState.STOP, force_output=True
         )
-        self.evt_mainDoorCommandedState.set_put(
+        await self.evt_mainDoorCommandedState.set_write(
             commandedState=ShutterDoorCommandedState.STOP, force_output=True
         )
         await self.run_command("ST")
@@ -225,10 +225,10 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 raise salobj.ExpectedError("Azimuth is moving")
 
             # Homing is allowed; do it!
-            self.cmd_homeAzimuth.ack_in_progress(
+            await self.cmd_homeAzimuth.ack_in_progress(
                 data=data, timeout=HOME_AZIMUTH_TIMEOUT
             )
-            self.evt_azimuthCommandedState.set_put(
+            await self.evt_azimuthCommandedState.set_write(
                 commandedState=AzimuthCommandedState.HOME,
                 azimuth=math.nan,
                 force_output=True,
@@ -247,13 +247,15 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 self.homing = bool(
                     self.evt_moveCode.data.code & MoveCode.AZIMUTH_HOMING
                 )
-            self.evt_azimuthState.set_put(homed=True, homing=False, force_output=True)
+            await self.evt_azimuthState.set_write(
+                homed=True, homing=False, force_output=True
+            )
         except Exception:
             self.log.exception("homing failed")
         finally:
             self.homing = False
             if put_final_azimuth_commanded_state:
-                self.evt_azimuthCommandedState.set_put(
+                await self.evt_azimuthCommandedState.set_write(
                     commandedState=AzimuthCommandedState.STOP,
                     force_output=True,
                 )
@@ -266,12 +268,12 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 "Cannot move the dropout door until the main door is fully open."
             )
         if data.open:
-            self.evt_dropoutDoorCommandedState.set_put(
+            await self.evt_dropoutDoorCommandedState.set_write(
                 commandedState=ShutterDoorCommandedState.OPENED, force_output=True
             )
             await self.run_command("DN")
         else:
-            self.evt_dropoutDoorCommandedState.set_put(
+            await self.evt_dropoutDoorCommandedState.set_write(
                 commandedState=ShutterDoorCommandedState.CLOSED, force_output=True
             )
             await self.run_command("UP")
@@ -287,7 +289,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         """Implement the ``moveShutterMainDoor`` command."""
         self.assert_enabled()
         if data.open:
-            self.evt_mainDoorCommandedState.set_put(
+            await self.evt_mainDoorCommandedState.set_write(
                 commandedState=ShutterDoorCommandedState.OPENED, force_output=True
             )
             await self.run_command("OP")
@@ -300,7 +302,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                     "Cannot close the main door "
                     "until the dropout door is fully closed or fully open."
                 )
-            self.evt_mainDoorCommandedState.set_put(
+            await self.evt_mainDoorCommandedState.set_write(
                 commandedState=ShutterDoorCommandedState.CLOSED, force_output=True
             )
             await self.run_command("CL")
@@ -376,7 +378,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 self.log.error(err_msg)
                 raise salobj.ExpectedError(err_msg)
             elif cmd == "+":
-                self.handle_status(lines)
+                await self.handle_status(lines)
 
     def compute_in_position_mask(self, move_code):
         """Compute in_position_mask.
@@ -528,7 +530,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
     async def configure(self, config):
         self.config = config
-        self.evt_settingsAppliedDomeTcp.set_put(
+        await self.evt_settingsAppliedDomeTcp.set_write(
             host=self.config.host,
             port=self.config.port,
             connectionTimeout=self.config.connection_timeout,
@@ -606,7 +608,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
         # Halt all motion, if possible. We just want to stop azimuth,
         # but there is no way to do that.
-        self.evt_azimuthCommandedState.set_put(
+        await self.evt_azimuthCommandedState.set_write(
             commandedState=AzimuthCommandedState.STOP, force_output=True
         )
         try:
@@ -616,10 +618,10 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             pass
 
         # Close the shutter, if possible.
-        self.evt_dropoutDoorCommandedState.set_put(
+        await self.evt_dropoutDoorCommandedState.set_write(
             commandedState=ShutterDoorCommandedState.CLOSED, force_output=True
         )
-        self.evt_mainDoorCommandedState.set_put(
+        await self.evt_mainDoorCommandedState.set_write(
             commandedState=ShutterDoorCommandedState.CLOSED, force_output=True
         )
         try:
@@ -650,9 +652,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 self.status_task, timeout=self.config.read_timeout * 2
             )
         await self.stop_mock_ctrl()
-        self.evt_azimuthState.set_put(homed=False)
+        await self.evt_azimuthState.set_write(homed=False)
 
-    def handle_status(self, lines):
+    async def handle_status(self, lines):
         """Handle output of "?" command.
 
         Parameters
@@ -677,15 +679,15 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 f"status.encoder_counts={status.encoder_counts} too big for SAL topic!"
             )
             self.tel_position.set(azimuthEncoderPosition=0)
-        self.tel_position.set_put(
+        await self.tel_position.set_write(
             mainDoorOpeningPercentage=status.main_door_pct,
             dropoutDoorOpeningPercentage=status.dropout_door_pct,
             azimuthPosition=status.az_pos,
         )
 
         move_code = status.move_code
-        self.evt_moveCode.set_put(code=move_code)
-        self.evt_azimuthState.set_put(
+        await self.evt_moveCode.set_write(code=move_code)
+        await self.evt_azimuthState.set_write(
             state=self.compute_az_state(move_code),
             homing=bool(move_code & MoveCode.AZIMUTH_HOMING) or self.homing,
             homeSwitch=status.az_home_switch,
@@ -701,10 +703,10 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             is_main=True,
             move_code=move_code,
         )
-        self.evt_dropoutDoorState.set_put(state=dropout_door_state)
-        self.evt_mainDoorState.set_put(state=main_door_state)
+        await self.evt_dropoutDoorState.set_write(state=dropout_door_state)
+        await self.evt_mainDoorState.set_write(state=main_door_state)
 
-        self.evt_emergencyStop.set_put(active=move_code & MoveCode.ESTOP > 0)
+        await self.evt_emergencyStop.set_write(active=move_code & MoveCode.ESTOP > 0)
 
         in_position_mask = self.compute_in_position_mask(move_code)
 
@@ -713,9 +715,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
         azimuth_in_position = in_position(Axis.AZIMUTH)
         shutter_in_position = in_position(Axis.DROPOUT_DOOR | Axis.MAIN_DOOR)
-        self.evt_azimuthInPosition.set_put(inPosition=azimuth_in_position)
-        self.evt_shutterInPosition.set_put(inPosition=shutter_in_position)
-        self.evt_allAxesInPosition.set_put(
+        await self.evt_azimuthInPosition.set_write(inPosition=azimuth_in_position)
+        await self.evt_shutterInPosition.set_write(inPosition=shutter_in_position)
+        await self.evt_allAxesInPosition.set_write(
             inPosition=azimuth_in_position and shutter_in_position
         )
 
@@ -730,20 +732,20 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             if end_shutter_task:
                 self.shutter_task.set_result(None)
 
-        self.evt_emergencyStop.set_put(active=status.estop_active)
+        await self.evt_emergencyStop.set_write(active=status.estop_active)
 
-        self.evt_scbLink.set_put(active=status.scb_link_ok)
+        await self.evt_scbLink.set_write(active=status.scb_link_ok)
 
-        self.evt_doorEncoderExtremes.set_put(
+        await self.evt_doorEncoderExtremes.set_write(
             mainClosed=status.main_door_encoder_closed,
             mainOpened=status.main_door_encoder_opened,
             dropoutClosed=status.dropout_door_encoder_closed,
             dropoutOpened=status.dropout_door_encoder_opened,
         )
 
-        self.evt_lastAzimuthGoTo.set_put(position=status.last_azimuth_goto)
+        await self.evt_lastAzimuthGoTo.set_write(position=status.last_azimuth_goto)
 
-        self.evt_settingsAppliedDomeController.set_put(
+        await self.evt_settingsAppliedDomeController.set_write(
             rainSensorEnabled=status.rain_sensor_enabled,
             cloudSensorEnabled=status.cloud_sensor_enabled,
             tolerance=status.tolerance,
@@ -826,15 +828,15 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
     async def start(self):
         await super().start()
-        self.evt_azimuthCommandedState.set_put(
+        await self.evt_azimuthCommandedState.set_write(
             commandedState=AzimuthCommandedState.UNKNOWN,
             azimuth=math.nan,
             force_output=True,
         )
-        self.evt_dropoutDoorCommandedState.set_put(
+        await self.evt_dropoutDoorCommandedState.set_write(
             commandedState=ShutterDoorCommandedState.UNKNOWN, force_output=True
         )
-        self.evt_mainDoorCommandedState.set_put(
+        await self.evt_mainDoorCommandedState.set_write(
             commandedState=ShutterDoorCommandedState.UNKNOWN, force_output=True
         )
 
