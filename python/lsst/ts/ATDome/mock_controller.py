@@ -26,7 +26,7 @@ import functools
 import logging
 
 from lsst.ts import simactuators
-from lsst.ts import salobj
+from lsst.ts import utils
 from .enums import MoveCode
 
 logging.basicConfig()
@@ -127,7 +127,7 @@ class MockDomeController:
             for enum in Door
         }
 
-        self._homing_task = salobj.make_done_future()
+        self._homing_task = utils.make_done_future()
         self.rain_sensor_enabled = True
         self.rain_detected = False
         self.cloud_sensor_enabled = True
@@ -284,7 +284,7 @@ class MockDomeController:
 
     def do_short_status(self):
         """Create short status as a list of strings."""
-        curr_tai = salobj.current_tai()
+        curr_tai = utils.current_tai()
         move_code = MoveCode(0)
         outputs = []
         for door, name, closing_code, opening_code in (

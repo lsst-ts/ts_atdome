@@ -6,8 +6,23 @@
 Version History
 ###############
 
+v1.7.0
+------
+
+* Update for ts_salobj v7, which is required.
+  This also requires ts_xml 11.
+* Use ts_utils and pytest-black.
+
+Requires:
+
+* ts_salobj 6.3
+* ts_simactuators 2
+* ts_utils
+* ts_idl
+* IDL file for ATDome built from ts_xml 11
+
 v1.6.1
-======
+------
 
 * Remove ``asynctest`` from setup.py
 
@@ -19,7 +34,7 @@ Requires:
 * IDL file for ATDome from ts_xml 9
 
 v1.6.0
-======
+------
 
 * `DomeCsc`: overhaul azimuth homing:
 
@@ -42,7 +57,7 @@ Requires:
 * IDL file for ATDome from ts_xml 9
 
 v1.5.2
-======
+------
 
 * Reformat the code with black 20.8b1
 
@@ -54,7 +69,7 @@ Requires:
 * IDL file for ATDome from ts_xml 8
 
 v1.5.1
-======
+------
 
 * Make test_csc.py more robust by changing assert_angle_in_range to test angle <= max_angle instead of <.
   This avoids a race condition.
@@ -67,7 +82,7 @@ Requires:
 * IDL file for ATDome from ts_xml 8
 
 v1.5.0
-======
+------
 
 * Store the CSC configuration schema in code.
   This requires ts_salobj 6.3.
@@ -80,7 +95,7 @@ Requires:
 * IDL file for ATDome from ts_xml 8
 
 v1.4.0
-======
+------
 
 * `ATDomeCsc`: publish the new moveCode event. This requires ts_xml 8.
 * `ATDomeCsc`: set class variable ``version`` and test that this properly sets the ``cscVersion`` field of the ``softwareVersions`` event.
@@ -98,7 +113,7 @@ Requires:
 * IDL file for ATDome from ts_xml 8
 
 v1.3.4
-======
+------
 
 * `ATDomeCsc`: update the moveAzimuth command to support azimuth angles outside the range [0, 360)
 
@@ -110,7 +125,7 @@ Requires:
 * IDL file for ATDome from ts_xml 4.8
 
 v1.3.3
-======
+------
 
 * Fix an exception in the status loop caused by comparing an astropy unit to a scalar (DM-27885).
 * Update the unit tests to check the three inPosition events after a move (which catches DM-27885).
@@ -125,13 +140,13 @@ Requires:
 * IDL file for ATDome from ts_xml 4.8
 
 v1.3.2
-======
+------
 
 * Update Jenkinsfile.conda to Jenkins Shared Library
 * Pin the ts-idl and ts-salobj versions in the conda recipe
 
 v1.3.1
-======
+------
 
 Changes:
 
@@ -145,7 +160,7 @@ Requires:
 * IDL file for ATDome from ts_xml 4.8
 
 v1.3.0
-======
+------
 
 Changes:
 
@@ -159,7 +174,7 @@ Requires:
 * IDL file for ATDome from ts_xml 4.8
 
 v1.2.1
-======
+------
 
 Changes:
 
@@ -173,7 +188,7 @@ Requires:
 * IDL file for ATDome from ts_xml 4.8
 
 v1.2.0
-======
+------
 
 Changes:
 
@@ -188,7 +203,7 @@ Requires:
 * IDL file for ATDome from ts_xml 4.8
 
 v1.1.3
-======
+------
 
 Changes:
 
@@ -202,7 +217,7 @@ Requires:
 * IDL file for ATDome from ts_xml 4.8
 
 v1.1.2
-======
+------
 
 Changes:
 
@@ -219,7 +234,7 @@ Requires:
 * IDL file for ATDome from ts_xml 4.8
 
 v1.1.1
-======
+------
 
 Major changes:
 
@@ -235,7 +250,7 @@ Requires:
 * IDL file for ATDome from ts_xml 4.8
 
 v1.1.0
-======
+------
 
 Major changes:
 
@@ -254,7 +269,7 @@ Requires:
 * IDL file for ATDome from ts_xml 4.8
 
 v1.0.0
-======
+------
 
 Update for a change to the low-level controller (a minor change to full status output).
 
@@ -266,7 +281,7 @@ Requires:
 * IDL file for ATDome from ts_xml 4.1
 
 v0.10.0
-=======
+------=
 
 Update to use ts_simactuators.
 
@@ -278,7 +293,7 @@ Requires:
 * IDL file for ATDome from ts_xml 4.1
 
 v0.9.0
-======
+------
 
 Update for ts_salobj 5.2: rename initial_simulation_mode to simulation_mode.
 
@@ -289,7 +304,7 @@ Requires:
 * IDL file for ATDome from ts_xml 4.1
 
 v0.8.0
-======
+------
 
 Change the shutter motion commands to report done only after the shutter motion finishes.
 Change the behavior when going from ENABLED to DISABLED state to stop the azimuth and close the shutters.
@@ -305,7 +320,7 @@ Requires:
 * IDL file for ATDome from ts_xml 4.1
 
 v0.7.0
-======
+------
 
 Make ATDome a non-indexed SAL component.
 
@@ -316,12 +331,12 @@ Requires:
 * IDL file for ATDome from ts_xml 4.1
 
 v0.6.1
-======
+------
 
 Add a dependency on ``ts_config_attcs`` to the ups table file.
 
 v0.6.0
-======
+------
 
 Use OpenSplice dds instead of SALPY libraries.
 
@@ -332,7 +347,7 @@ Requires:
 * IDL file for ATDome from ts_xml 3.9
 
 v0.5.0
-======
+------
 
 Make configurable in the standard way.
 The configuration files are in package ``ts_config_attcs``.
@@ -344,7 +359,7 @@ Requires:
 * ts_xml 3.9
 
 v0.4.0
-======
+------
 
 Add commanded state events.
 Fixed several issues with the real ATDome TCP/IP interface.
@@ -356,7 +371,7 @@ Requires:
 * ts_salobj 3.9
 
 v0.3.0
-======
+------
 
 Allow ``run_atdome.py`` to start in simulation mode.
 
@@ -368,12 +383,12 @@ Requires:
 
 
 v0.2.1
-======
+------
 
 Fix line width warnings for documentation and comments.
 
 v0.2.0
-======
+------
 
 First release of the real ATDome CSC, not just a simulator.
 
@@ -386,7 +401,7 @@ Requires:
 * ts_xml develop cf6280b through 3.9
 
 v0.1.0
-======
+------
 
 First release of the ATDome simulator.
 

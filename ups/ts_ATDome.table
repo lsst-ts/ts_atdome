@@ -1,6 +1,7 @@
 setupRequired(sconsUtils)
 setupRequired(ts_simactuators)
 setupRequired(ts_salobj)
+setupRequired(ts_utils)
 setupRequired(ts_config_attcs)
 
 envPrepend(PATH, ${PRODUCT_DIR}/bin)
