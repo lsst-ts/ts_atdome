@@ -29,6 +29,7 @@ import unittest
 import yaml
 
 from lsst.ts import salobj
+from lsst.ts import utils
 from lsst.ts.idl.enums.ATDome import (
     AzimuthCommandedState,
     AzimuthState,
@@ -47,8 +48,9 @@ FLOAT_DELTA = 1e-4  # Delta to use when comparing two float angles
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        super().setUp()
         # An azimuth well away from the initial azimuth.
-        self.distant_azimuth = salobj.angle_wrap_nonnegative(
+        self.distant_azimuth = utils.angle_wrap_nonnegative(
             ATDome.INITIAL_AZIMUTH - 180
         ).deg
 
@@ -160,8 +162,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
             desired_config_pkg_name = "ts_config_attcs"
             desired_config_env_name = desired_config_pkg_name.upper() + "_DIR"
-            desird_config_pkg_dir = os.environ[desired_config_env_name]
-            desired_config_dir = pathlib.Path(desird_config_pkg_dir) / "ATDome/v1"
+            desired_config_pkg_dir = os.environ[desired_config_env_name]
+            desired_config_dir = pathlib.Path(desired_config_pkg_dir) / "ATDome/v2"
             self.assertEqual(self.csc.get_config_pkg(), desired_config_pkg_name)
             self.assertEqual(self.csc.config_dir, desired_config_dir)
 
@@ -181,15 +183,15 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 with self.subTest(bad_config_name=bad_config_name):
                     with salobj.assertRaisesAckError():
                         await self.remote.cmd_start.set_start(
-                            settingsToApply=bad_config_name, timeout=STD_TIMEOUT
+                            configurationOverride=bad_config_name, timeout=STD_TIMEOUT
                         )
 
             await self.remote.cmd_start.set_start(
-                settingsToApply="all_fields", timeout=STD_TIMEOUT
+                configurationOverride="", timeout=STD_TIMEOUT
             )
             self.assertEqual(self.csc.summary_state, salobj.State.DISABLED)
             await self.assert_next_summary_state(salobj.State.DISABLED)
-            all_fields_path = os.path.join(TEST_CONFIG_DIR, "all_fields.yaml")
+            all_fields_path = os.path.join(TEST_CONFIG_DIR, "_init.yaml")
             with open(all_fields_path, "r") as f:
                 all_fields_raw = f.read()
             all_fields_data = yaml.safe_load(all_fields_raw)
@@ -222,7 +224,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             # Set home azimuth home switch near the current position,
             # so homing goes quickly.
             curr_az = self.csc.mock_ctrl.az_actuator.position()
-            home_azimuth = salobj.angle_wrap_nonnegative(curr_az - 5).deg
+            home_azimuth = utils.angle_wrap_nonnegative(curr_az - 5).deg
             self.csc.mock_ctrl.home_az = home_azimuth
 
             homing_task = asyncio.create_task(
@@ -414,7 +416,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 (390.3, AzimuthState.MOVINGCW, -1.2 + 360, 390.3 - 360),
                 (-1.2, AzimuthState.MOVINGCCW, -1.2 + 360, 390.3 - 360),
             ):
-                wrapped_desired_azimuth = salobj.angle_wrap_nonnegative(
+                wrapped_desired_azimuth = utils.angle_wrap_nonnegative(
                     desired_azimuth
                 ).deg
                 # Motion should warn because the azimuth axis is not homed.
