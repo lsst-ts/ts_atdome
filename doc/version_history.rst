@@ -6,6 +6,19 @@
 Version History
 ###############
 
+v1.7.1
+------
+
+* Build using pyproject.toml
+
+Requires:
+
+* ts_salobj 6.3
+* ts_simactuators 2
+* ts_utils
+* ts_idl
+* IDL file for ATDome built from ts_xml 11
+
 v1.7.0
 ------
 
