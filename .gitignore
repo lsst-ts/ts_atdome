@@ -6,8 +6,7 @@ config.log
 *.so
 *.cfgc
 *.pyc
-.vscode
-ospl-*.log
+*.log
 
 # Built by sconsUtils
 version.py
@@ -15,6 +14,9 @@ version.py
 # Pytest
 tests/.tests
 pytest_session.txt
-.cache/
+.cache
+.hypothesis
 .pytest_cache
 .coverage
+
+.vscode
