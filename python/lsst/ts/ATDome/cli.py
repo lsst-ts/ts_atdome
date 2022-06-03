@@ -1,6 +1,6 @@
-# This file is part of ts_ATDome.
+# This file is part of ts_mteec.
 #
-# Developed for Vera C. Rubin Observatory Telescope and Site Systems.
+# Developed for the Vera C. Rubin Observatory Telescope and Site Systems.
 # This product includes software developed by the LSST Project
 # (https://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
@@ -19,14 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-try:
-    from .version import *
-except ImportError:
-    __version__ = "?"
+__all__ = ["execute_csc"]
 
-from .cli import *
-from .config_schema import *
-from .enums import *
-from .status import *
-from .dome_csc import *
-from .mock_controller import *
+import asyncio
+
+from .dome_csc import ATDomeCsc
+
+
+def execute_csc():
+    asyncio.run(ATDomeCsc.amain(index=None))
