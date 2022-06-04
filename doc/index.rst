@@ -35,7 +35,7 @@ Start the ATDome CSC as follows:
 
 .. prompt:: bash
 
-    run_atdome.py
+    run_atdome
 
 Stop the CSC by sending it to the OFFLINE state.
 
@@ -85,7 +85,7 @@ The CSC includes a simulation mode. To run using simulation:
 
 .. prompt:: bash
 
-    run_atdome.py --simulate
+    run_atdome --simulate
 
 The simulated azimuth axis and shutter doors move at constant speed, with infinite acceleration.
 
