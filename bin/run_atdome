@@ -17,8 +17,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
-import asyncio
+from lsst.ts.ATDome.cli import execute_csc
 
-from lsst.ts import ATDome
 
-asyncio.run(ATDome.ATDomeCsc.amain(index=None))
+execute_csc()
