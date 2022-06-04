@@ -9,7 +9,7 @@ source:
 build:
   script: python -m pip install --no-deps --ignore-installed .
   entry_points:
-    - run_atdome = lsst.ts.ATDome.cli:execute_csc
+    - run_atdome = lsst.ts.ATDome:run_atdome
   script_env:
     - PATH
     - PYTHONPATH

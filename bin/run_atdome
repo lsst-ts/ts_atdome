@@ -17,7 +17,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
-from lsst.ts.ATDome.cli import execute_csc
+from lsst.ts.ATDome import run_atdome
 
 
-execute_csc()
+run_atdome()
