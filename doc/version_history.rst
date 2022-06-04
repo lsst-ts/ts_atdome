@@ -10,6 +10,7 @@ v1.7.1
 ------
 
 * Rename command-line scripts to remove ".py" suffix.
+* Add ``Jenkinsfile`` for continuous integration.
 * Build with pyproject.toml.
 
 Requires:
