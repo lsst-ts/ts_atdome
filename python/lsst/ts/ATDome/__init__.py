@@ -24,7 +24,6 @@ try:
 except ImportError:
     __version__ = "?"
 
-from .cli import *
 from .config_schema import *
 from .enums import *
 from .status import *
