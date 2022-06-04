@@ -6,7 +6,7 @@
 Version History
 ###############
 
-v1.7.1
+v1.8.0
 ------
 
 * Rename command-line scripts to remove ".py" suffix.
