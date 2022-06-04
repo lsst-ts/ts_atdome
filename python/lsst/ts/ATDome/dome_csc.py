@@ -878,5 +878,5 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
 
 def run_atdome():
-    """Run the ATDome CSC. An entry point."""
+    """Run the ATDome CSC."""
     asyncio.run(ATDomeCsc.amain(index=None))
