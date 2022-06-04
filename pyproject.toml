@@ -17,7 +17,7 @@ version = { attr = "setuptools_scm.get_version" }
 where = [ "python" ]
 
 [project.scripts]
-run_atdome = "lsst.ts.ATDome.cli:run_atdome"
+run_atdome = "lsst.ts.ATDome:run_atdome"
 
 [tool.setuptools_scm]
 write_to = "python/lsst/ts/ATDome/version.py"
