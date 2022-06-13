@@ -1,2 +1,2 @@
 @Library('JenkinsShared')_
-CondaPipeline(["ts_config_attcs"], "ts-atdome", "lsst.ts.ATDome")
+CondaPipeline(["ts_config_attcs"], "ts-atdome", "lsst.ts.ATDome", "noarch")
