@@ -6,6 +6,21 @@
 Version History
 ###############
 
+v1.8.0
+------
+
+* Rename command-line scripts to remove ".py" suffix.
+* Add ``Jenkinsfile`` for continuous integration.
+* Build with pyproject.toml.
+
+Requires:
+
+* ts_salobj 6.3
+* ts_simactuators 2
+* ts_utils
+* ts_idl
+* IDL file for ATDome built from ts_xml 11
+
 v1.7.0
 ------
 

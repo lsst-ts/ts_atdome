@@ -6,12 +6,14 @@
 lsst.ts.ATDome
 ##############
 
+.. image:: https://img.shields.io/badge/Project Metadata-gray.svg
+    :target: https://ts-xml.lsst.io/index.html#index-csc-table-atdome
 .. image:: https://img.shields.io/badge/SAL\ Interface-gray.svg
     :target: https://ts-xml.lsst.io/sal_interfaces/ATDome.html
 .. image:: https://img.shields.io/badge/GitHub-gray.svg
     :target: https://github.com/lsst-ts/ts_ATDome
 .. image:: https://img.shields.io/badge/Jira-gray.svg
-    :target: https://jira.lsstcorp.org/issues/?jql=labels+%3D+ts_ATDome
+    :target: https://jira.lsstcorp.org/issues/?jql=project%3DDM%20AND%20labels%3Dts_ATDome
 
 .. _lsst.ts.ATDome.overview:
 
@@ -33,7 +35,7 @@ Start the ATDome CSC as follows:
 
 .. prompt:: bash
 
-    run_atdome.py
+    run_atdome
 
 Stop the CSC by sending it to the OFFLINE state.
 
@@ -83,7 +85,7 @@ The CSC includes a simulation mode. To run using simulation:
 
 .. prompt:: bash
 
-    run_atdome.py --simulate
+    run_atdome --simulate
 
 The simulated azimuth axis and shutter doors move at constant speed, with infinite acceleration.
 

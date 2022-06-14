@@ -44,4 +44,4 @@ Contributing
 ============
 
 ``lsst.ts.ATDome`` is developed at https://github.com/lsst-ts/ts_ATDome.
-Bug reports and feature requests use `Jira with labels=ts_ATDome <https://jira.lsstcorp.org/issues/?jql=project%20%3D%20DM%20AND%20labels%20%20%3D%20ts_ATDome>`_.
+Bug reports and feature requests use `Jira with project=DM labels=ts_ATDome <https://jira.lsstcorp.org/issues/?jql=project%3DDM%20AND%20labels%3Dts_ATDome>`_.

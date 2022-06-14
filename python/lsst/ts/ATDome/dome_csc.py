@@ -18,7 +18,7 @@
 #
 # You should have received a copy of the GNU General Public License
 
-__all__ = ["ATDomeCsc"]
+__all__ = ["ATDomeCsc", "run_atdome"]
 
 import asyncio
 import enum
@@ -875,3 +875,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         for i in range(n):
             self.status_event.clear()
             await self.status_event.wait()
+
+
+def run_atdome():
+    """Run the ATDome CSC."""
+    asyncio.run(ATDomeCsc.amain(index=None))
