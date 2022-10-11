@@ -29,7 +29,7 @@ pipeline {
         IDL_NAMES = 'ATDome'
         // Product name for documentation upload; the associated
         // documentation site is `https://{DOC_PRODUCT_NAME}.lsst.io`.
-        DOC_PRODUCT_NAME = 'ts-atdometrajectory'
+        DOC_PRODUCT_NAME = 'ts-atdome'
 
         WORK_BRANCHES = "${GIT_BRANCH} ${CHANGE_BRANCH} develop"
         LSST_IO_CREDS = credentials('lsst-io')
