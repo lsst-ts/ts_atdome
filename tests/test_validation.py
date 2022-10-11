@@ -1,4 +1,4 @@
-# This file is part of ts_ATDomeTrajectory.
+# This file is part of ts_atdome.
 #
 # Developed for the LSST Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -26,7 +26,7 @@ import jsonschema
 import pytest
 import yaml
 
-from lsst.ts import ATDome
+from lsst.ts import atdome
 from lsst.ts import salobj
 
 TEST_CONFIG_DIR = pathlib.Path(__file__).parent / "data" / "config"
@@ -36,7 +36,7 @@ class ValidationTestCase(unittest.TestCase):
     """Test validation of the config schema."""
 
     def setUp(self):
-        self.schema = ATDome.CONFIG_SCHEMA
+        self.schema = atdome.CONFIG_SCHEMA
         self.validator = salobj.StandardValidator(schema=self.schema)
         with open(TEST_CONFIG_DIR / "_init.yaml", "r") as f:
             raw_config = f.read()

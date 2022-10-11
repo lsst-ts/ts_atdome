@@ -1,4 +1,4 @@
-# This file is part of ts_ATDome.
+# This file is part of ts_atdome.
 #
 # Developed for Vera C. Rubin Observatory Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -132,7 +132,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.mock_port = mock_port
         self.status_event = asyncio.Event()
         super().__init__(
-            "ATDome",
+            name="ATDome",
             index=0,
             config_schema=CONFIG_SCHEMA,
             config_dir=config_dir,

@@ -1,4 +1,4 @@
-# This file is part of ts_ATDome.
+# This file is part of ts_atdome.
 #
 # Developed for Vera C. Rubin Observatory Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -22,7 +22,7 @@ import asyncio
 import unittest
 
 from lsst.ts import utils
-from lsst.ts import ATDome
+from lsst.ts import atdome
 
 
 class MockTestCase(unittest.IsolatedAsyncioTestCase):
@@ -32,7 +32,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         self.ctrl = None
         self.writer = None
 
-        self.ctrl = ATDome.MockDomeController(port=0)
+        self.ctrl = atdome.MockDomeController(port=0)
         await asyncio.wait_for(self.ctrl.start(), 5)
         rw_coro = asyncio.open_connection(host="127.0.0.1", port=self.ctrl.port)
         self.reader, self.writer = await asyncio.wait_for(rw_coro, timeout=5)
@@ -66,12 +66,12 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_initial_full_status(self):
         reply_lines = await self.send_cmd("+")
 
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertEqual(status.main_door_pct, 0)
         self.assertEqual(status.dropout_door_pct, 0)
         self.assertEqual(status.auto_shutdown_enabled, self.ctrl.auto_shutdown_enabled)
         self.assertEqual(status.sensor_code, 0)
-        self.assertAlmostEqual(status.az_pos, ATDome.INITIAL_AZIMUTH)
+        self.assertAlmostEqual(status.az_pos, atdome.INITIAL_AZIMUTH)
         self.assertEqual(status.move_code, 0)
         self.assertEqual(status.estop_active, self.ctrl.estop_active)
         self.assertEqual(status.scb_link_ok, self.ctrl.scb_link_ok)
@@ -112,24 +112,24 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_move_az(self):
         # Test initial conditions; some details of this test
         # may have to be changed if this value changes.
-        self.assertAlmostEqual(ATDome.INITIAL_AZIMUTH, 285)
+        self.assertAlmostEqual(atdome.INITIAL_AZIMUTH, 285)
 
         daz = -3
-        az = ATDome.INITIAL_AZIMUTH + daz
+        az = atdome.INITIAL_AZIMUTH + daz
         est_duration = abs(daz / self.ctrl.az_vel)
         reply_lines = await self.send_cmd(f"{az:0.2f} MV")
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
-        self.assertLess(status.az_pos, ATDome.INITIAL_AZIMUTH)
-        self.assertGreater(status.az_pos, ATDome.INITIAL_AZIMUTH + daz)
+        status = atdome.Status(reply_lines)
+        self.assertLess(status.az_pos, atdome.INITIAL_AZIMUTH)
+        self.assertGreater(status.az_pos, atdome.INITIAL_AZIMUTH + daz)
         self.assertEqual(status.move_code, 2)
 
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertAlmostEqual(status.az_pos, az)
         self.assertEqual(status.move_code, 0)
 
@@ -146,7 +146,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         # sleep until halfway through CCW motion and check status
         await asyncio.sleep(est_ccw_duration / 2)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertEqual(status.move_code, 2 + 64)
         self.assertAlmostEqual(self.ctrl.az_actuator.speed, self.ctrl.az_vel)
 
@@ -155,14 +155,14 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
             self.ctrl.az_actuator.remaining_time() + est_ccw_duration / 2
         )
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertEqual(status.move_code, 1 + 64)
         self.assertAlmostEqual(self.ctrl.az_actuator.speed, self.ctrl.home_az_vel)
 
         # sleep until we're done and check status
         await asyncio.sleep(self.ctrl.az_actuator.remaining_time() + 0.1)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertEqual(status.move_code, 0)
         self.assertAlmostEqual(self.ctrl.az_actuator.speed, self.ctrl.az_vel)
         self.assertAlmostEqual(
@@ -188,7 +188,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
             # Wait a bit extra for Docker macOS clock non-monotonicity.
             await asyncio.sleep(self.ctrl.az_actuator.remaining_time() + 0.2)
             reply_lines = await self.send_cmd("+")
-            status = ATDome.Status(reply_lines)
+            status = atdome.Status(reply_lines)
             self.assertEqual(status.move_code, 0)
             self.assertAlmostEqual(status.az_pos, az)
             self.assertTrue(status.az_home_switch)
@@ -205,7 +205,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
             # Wait a bit extra for Docker macOS clock non-monotonicity.
             await asyncio.sleep(self.ctrl.az_actuator.remaining_time() + 0.2)
             reply_lines = await self.send_cmd("+")
-            status = ATDome.Status(reply_lines)
+            status = atdome.Status(reply_lines)
             self.assertEqual(status.move_code, 0)
             self.assertAlmostEqual(status.az_pos, az)
             self.assertFalse(status.az_home_switch)
@@ -218,7 +218,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertLess(status.main_door_pct, 100)
         self.assertGreater(status.main_door_pct, 0)
         self.assertEqual(status.move_code, 8)
@@ -226,7 +226,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertAlmostEqual(status.main_door_pct, 100)
         self.assertEqual(status.move_code, 0)
 
@@ -235,7 +235,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertLess(status.main_door_pct, 100)
         self.assertGreater(status.main_door_pct, 0)
         self.assertEqual(status.move_code, 4)
@@ -243,7 +243,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertAlmostEqual(status.main_door_pct, 0)
         self.assertEqual(status.move_code, 0)
 
@@ -255,7 +255,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertLess(status.dropout_door_pct, 100)
         self.assertGreater(status.dropout_door_pct, 0)
         self.assertEqual(status.move_code, 32)
@@ -263,7 +263,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertAlmostEqual(status.dropout_door_pct, 100)
         self.assertEqual(status.move_code, 0)
 
@@ -272,7 +272,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertLess(status.dropout_door_pct, 100)
         self.assertGreater(status.dropout_door_pct, 0)
         self.assertEqual(status.move_code, 16)
@@ -280,7 +280,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertAlmostEqual(status.dropout_door_pct, 0)
         self.assertEqual(status.move_code, 0)
 
@@ -292,7 +292,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertLess(status.main_door_pct, 100)
         self.assertGreater(status.main_door_pct, 0)
         self.assertLess(status.dropout_door_pct, 100)
@@ -302,7 +302,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertAlmostEqual(status.main_door_pct, 100)
         self.assertAlmostEqual(status.dropout_door_pct, 100)
         self.assertEqual(status.move_code, 0)
@@ -312,7 +312,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply_lines, [""])
         await asyncio.sleep(est_duration / 2)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertLess(status.main_door_pct, 100)
         self.assertGreater(status.main_door_pct, 0)
         self.assertLess(status.dropout_door_pct, 100)
@@ -322,7 +322,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         # wait long enough for the move to finish and check status
         await asyncio.sleep(est_duration / 2 + 0.5)
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertAlmostEqual(status.main_door_pct, 0)
         self.assertAlmostEqual(status.dropout_door_pct, 0)
         self.assertEqual(status.move_code, 0)
@@ -330,7 +330,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_stop(self):
         est_duration = self.ctrl.door_time
         daz = self.ctrl.az_vel * est_duration
-        az = ATDome.INITIAL_AZIMUTH + daz
+        az = atdome.INITIAL_AZIMUTH + daz
 
         # start azimuth motion
         reply_lines = await self.send_cmd(f"{az:0.2f} MV")
@@ -342,7 +342,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(est_duration / 2)
         reply_lines = await self.send_cmd("ST")
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertLess(status.az_pos, az)
         self.assertGreater(status.az_pos, 0)
         self.assertLess(status.main_door_pct, 100)
@@ -355,7 +355,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         self.ctrl.rain_enabled = False
 
         reply_lines = await self.send_cmd("+")
-        status = ATDome.Status(reply_lines)
+        status = atdome.Status(reply_lines)
         self.assertEqual(status.estop_active, self.ctrl.estop_active)
         self.assertEqual(status.scb_link_ok, status.scb_link_ok)
         self.assertEqual(status.rain_sensor_enabled, self.ctrl.rain_sensor_enabled)
@@ -372,7 +372,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
             setattr(self.ctrl, name, not getattr(self.ctrl, name))
 
             reply_lines = await self.send_cmd("+")
-            status = ATDome.Status(reply_lines)
+            status = atdome.Status(reply_lines)
             self.assertEqual(status.estop_active, self.ctrl.estop_active)
             self.assertEqual(status.scb_link_ok, status.scb_link_ok)
             self.assertEqual(status.rain_sensor_enabled, self.ctrl.rain_sensor_enabled)

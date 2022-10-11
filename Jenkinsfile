@@ -24,7 +24,7 @@ pipeline {
     }
     environment {
         // Python module name.
-        MODULE_NAME = 'lsst.ts.ATDome'
+        MODULE_NAME = 'lsst.ts.atdome'
         // Space-separated list of SAL component names for all IDL files required.
         IDL_NAMES = 'ATDome'
         // Product name for documentation upload; the associated
