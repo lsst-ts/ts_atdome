@@ -34,7 +34,7 @@ from lsst.ts.idl.enums.ATDome import (
 )
 from . import __version__
 from .config_schema import CONFIG_SCHEMA
-from .enums import MoveCode
+from .enums import ErrorCode, MoveCode
 from .mock_controller import MockDomeController
 from .status import Status
 
@@ -365,7 +365,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                     err_msg = "TCP/IP writer or read failed"
                     self.log.exception(err_msg)
                 await self.disconnect()
-                await self.fault(code=2, report=f"{err_msg}: {e}")
+                await self.fault(
+                    code=ErrorCode.TCPIP_READ_ERROR, report=f"{err_msg}: {e}"
+                )
                 raise salobj.ExpectedError(err_msg)
 
             data = read_bytes.decode()
@@ -579,7 +581,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 f"Could not open connection to host={host}, port={self.config.port}"
             )
             self.log.exception(err_msg)
-            await self.fault(code=1, report=f"{err_msg}: {e}")
+            await self.fault(
+                code=ErrorCode.TCPIP_CONNECT_ERROR, report=f"{err_msg}: {e}"
+            )
             return
 
         self.status_task = asyncio.ensure_future(self.status_loop())
@@ -816,7 +820,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         except Exception as e:
             err_msg = "Could not start mock controller"
             self.log.exception(e)
-            await self.fault(code=3, report=f"{err_msg}: {e}")
+            await self.fault(
+                code=ErrorCode.CANNOT_START_MOCK_CONTROLLER, report=f"{err_msg}: {e}"
+            )
             raise
 
     async def handle_summary_state(self):
