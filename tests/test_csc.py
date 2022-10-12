@@ -1,4 +1,4 @@
-# This file is part of ts_ATDome.
+# This file is part of ts_atdome.
 #
 # Developed for Vera C. Rubin Observatory Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -36,7 +36,7 @@ from lsst.ts.idl.enums.ATDome import (
     ShutterDoorCommandedState,
     ShutterDoorState,
 )
-from lsst.ts import ATDome
+from lsst.ts import atdome
 
 STD_TIMEOUT = 2  # Standard command timeout (sec)
 DOOR_TIMEOUT = 4  # Time limit for shutter door commands (sec)
@@ -51,11 +51,11 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         super().setUp()
         # An azimuth well away from the initial azimuth.
         self.distant_azimuth = utils.angle_wrap_nonnegative(
-            ATDome.INITIAL_AZIMUTH - 180
+            atdome.INITIAL_AZIMUTH - 180
         ).deg
 
     def basic_make_csc(self, initial_state, config_dir, simulation_mode):
-        return ATDome.ATDomeCsc(
+        return atdome.ATDomeCsc(
             initial_state=initial_state,
             config_dir=config_dir,
             simulation_mode=simulation_mode,
@@ -68,7 +68,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         ):
             await self.assert_next_sample(
                 self.remote.evt_softwareVersions,
-                cscVersion=ATDome.__version__,
+                cscVersion=atdome.__version__,
                 subsystemVersions="",
             )
             mock_ctrl = self.csc.mock_ctrl
@@ -89,7 +89,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 dropoutDoorOpeningPercentage=0,
                 mainDoorOpeningPercentage=0,
             )
-            self.assertAlmostEqual(position.azimuthPosition, ATDome.INITIAL_AZIMUTH)
+            self.assertAlmostEqual(position.azimuthPosition, atdome.INITIAL_AZIMUTH)
 
             ctrllr_settings = await self.assert_next_sample(
                 topic=self.remote.evt_settingsAppliedDomeController,
@@ -405,7 +405,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             # Test an initial condition necessary for this test.
             # If this fails then the first entry in
             # `for desired_azimuth, ...` may need to be updated.
-            self.assertAlmostEqual(ATDome.INITIAL_AZIMUTH, 285)
+            self.assertAlmostEqual(atdome.INITIAL_AZIMUTH, 285)
 
             # Try several angles, including some not in the range [0, 360);
             # CW direction is towards larger azimuth.
@@ -445,9 +445,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                     homing=False,
                 )
                 if desired_moving_state == AzimuthState.MOVINGCW:
-                    desired_code = ATDome.MoveCode.AZIMUTH_POSITIVE
+                    desired_code = atdome.MoveCode.AZIMUTH_POSITIVE
                 elif desired_moving_state == AzimuthState.MOVINGCCW:
-                    desired_code = ATDome.MoveCode.AZIMUTH_NEGATIVE
+                    desired_code = atdome.MoveCode.AZIMUTH_NEGATIVE
                 else:
                     self.fail(f"Unsupported moving state {desired_moving_state}")
                 await self.assert_next_sample(
@@ -522,8 +522,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 self.remote.evt_moveCode,
-                code=ATDome.MoveCode.MAIN_DOOR_OPENING
-                + ATDome.MoveCode.DROPOUT_DOOR_OPENING,
+                code=atdome.MoveCode.MAIN_DOOR_OPENING
+                + atdome.MoveCode.DROPOUT_DOOR_OPENING,
             )
 
             # Check fully open events.
@@ -551,8 +551,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 self.remote.evt_moveCode,
-                code=ATDome.MoveCode.MAIN_DOOR_CLOSING
-                + ATDome.MoveCode.DROPOUT_DOOR_CLOSING,
+                code=atdome.MoveCode.MAIN_DOOR_CLOSING
+                + atdome.MoveCode.DROPOUT_DOOR_CLOSING,
             )
 
             # Check fully closed events.
@@ -609,7 +609,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 self.remote.evt_moveCode,
-                code=ATDome.MoveCode.MAIN_DOOR_OPENING,
+                code=atdome.MoveCode.MAIN_DOOR_OPENING,
             )
 
             # Check that we cannot open or close the dropout door
@@ -657,7 +657,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 self.remote.evt_moveCode,
-                code=ATDome.MoveCode.DROPOUT_DOOR_OPENING,
+                code=atdome.MoveCode.DROPOUT_DOOR_OPENING,
             )
 
             # Make sure we can't close the main door
@@ -695,7 +695,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 self.remote.evt_moveCode,
-                code=ATDome.MoveCode.MAIN_DOOR_CLOSING,
+                code=atdome.MoveCode.MAIN_DOOR_CLOSING,
             )
 
             # Check main door closing status;
@@ -750,7 +750,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 self.remote.evt_moveCode,
-                code=ATDome.MoveCode.MAIN_DOOR_OPENING,
+                code=atdome.MoveCode.MAIN_DOOR_OPENING,
             )
 
             # Check main door fully opening status;
@@ -776,7 +776,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 self.remote.evt_moveCode,
-                code=ATDome.MoveCode.DROPOUT_DOOR_CLOSING,
+                code=atdome.MoveCode.DROPOUT_DOOR_CLOSING,
             )
 
             # Make sure we can't close the main door
@@ -821,7 +821,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 self.remote.evt_moveCode,
-                code=ATDome.MoveCode.MAIN_DOOR_CLOSING,
+                code=atdome.MoveCode.MAIN_DOOR_CLOSING,
             )
 
             # Check that we cannot open or close the dropout door
@@ -1082,7 +1082,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
             # Move azimuth and start opening the shutter.
             await self.remote.cmd_moveAzimuth.set_start(
-                azimuth=ATDome.INITIAL_AZIMUTH - 10, timeout=STD_TIMEOUT
+                azimuth=atdome.INITIAL_AZIMUTH - 10, timeout=STD_TIMEOUT
             )
             shutter_open_task = asyncio.ensure_future(
                 self.remote.cmd_openShutter.start(timeout=STD_TIMEOUT)
@@ -1153,7 +1153,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
             # Move azimuth and start opening the shutter.
             await self.remote.cmd_moveAzimuth.set_start(
-                azimuth=ATDome.INITIAL_AZIMUTH - 10, timeout=STD_TIMEOUT
+                azimuth=atdome.INITIAL_AZIMUTH - 10, timeout=STD_TIMEOUT
             )
             shutter_open_task = asyncio.ensure_future(
                 self.remote.cmd_openShutter.start(timeout=STD_TIMEOUT)

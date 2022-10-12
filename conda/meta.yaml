@@ -10,7 +10,7 @@ build:
   noarch: generic
   script: python -m pip install --no-deps --ignore-installed .
   entry_points:
-    - run_atdome = lsst.ts.ATDome:run_atdome
+    - run_atdome = lsst.ts.atdome:run_atdome
   script_env:
     - PATH
     - PYTHONPATH

@@ -1,4 +1,4 @@
-# This file is part of ts_ATDome.
+# This file is part of ts_atdome.
 #
 # Developed for Vera C. Rubin Observatory Telescope and Site Systems.
 # This product includes software developed by the LSST Project

@@ -1,9 +1,9 @@
-.. py:currentmodule:: lsst.ts.ATDome
+.. py:currentmodule:: lsst.ts.atdome
 
-.. _lsst.ts.ATDome:
+.. _lsst.ts.atdome:
 
 ##############
-lsst.ts.ATDome
+lsst.ts.atdome
 ##############
 
 .. image:: https://img.shields.io/badge/Project Metadata-gray.svg
@@ -11,11 +11,11 @@ lsst.ts.ATDome
 .. image:: https://img.shields.io/badge/SAL\ Interface-gray.svg
     :target: https://ts-xml.lsst.io/sal_interfaces/ATDome.html
 .. image:: https://img.shields.io/badge/GitHub-gray.svg
-    :target: https://github.com/lsst-ts/ts_ATDome
+    :target: https://github.com/lsst-ts/ts_atdome
 .. image:: https://img.shields.io/badge/Jira-gray.svg
-    :target: https://jira.lsstcorp.org/issues/?jql=project%3DDM%20AND%20labels%3Dts_ATDome
+    :target: https://jira.lsstcorp.org/issues/?jql=project%3DDM%20AND%20labels%3Dts_atdome
 
-.. _lsst.ts.ATDome.overview:
+.. _lsst.ts.atdome.overview:
 
 Overview
 ========
@@ -26,7 +26,7 @@ The Auxiliary Telescope Dome is a 30 foot diameter Ash Dome with azimuth rotatio
 The azimuth axis has no rotation limits.
 The top shutter door gives visibility from 30° elevation to zenith (90°), whereas the bottom shutter gives visibility from the horizon to 30° elevation.
 
-.. _lsst.ts.ATDome.user_guide:
+.. _lsst.ts.atdome.user_guide:
 
 User Guide
 ==========
@@ -65,18 +65,18 @@ If a new door command arrives while the door is moving, the door immediately sta
 .. _azimuthState: https://ts-xml.lsst.io/sal_interfaces/ATDome.html#azimuthstate
 .. _setEnabledMode: https://ts-xml.lsst.io/sal_interfaces/ATDomeTrajectory.html#setenabledmode
 
-.. _lsst.ts.ATDome.configuration:
+.. _lsst.ts.atdome.configuration:
 
 Configuration
 -------------
 
 It is unlikely that a user will have to modify the default configuration for ATDome, as it only contains parameters for the connection to the low-level controller.
 
-Configuration is defined by `this schema <https://github.com/lsst-ts/ts_ATDome/blob/develop/schema/ATDome.yaml>`_.
+Configuration is defined by `this schema <https://github.com/lsst-ts/ts_atdome/blob/main/python/lsst/ts/atdome/schema_config.py>`_.
 
 Configuration files live in `ts_config_attcs/ATDome <https://github.com/lsst-ts/ts_config_attcs/tree/develop/ATDome>`_.
 
-.. _lsst.ts.ATDome.simulation:
+.. _lsst.ts.atdome.simulation:
 
 Simulator
 ---------
