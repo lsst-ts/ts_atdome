@@ -6,6 +6,20 @@
 Version History
 ###############
 
+v1.10.0
+-------
+
+* Updated for new low-level controller software that reports whether the dome is homed.
+* Modernized the unit tests to use bare assert.
+
+Requires:
+
+* ts_salobj 6.3
+* ts_simactuators 2
+* ts_utils
+* ts_idl
+* IDL file for ATDome built from ts_xml 11
+
 v1.9.0
 ------
 
