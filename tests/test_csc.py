@@ -20,7 +20,6 @@
 
 import asyncio
 import glob
-import logging
 import math
 import os
 import pathlib
@@ -278,16 +277,10 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             # but not guaranteed, due to polling).
             await self.assert_next_azimuth_state(
                 state=AzimuthState.NOTINMOTION,
-                homed=False,
-                homeSwitch=True,
-                homing=True,
-                max_tries=2,
-            )
-            await self.assert_next_azimuth_state(
-                state=AzimuthState.NOTINMOTION,
                 homed=True,
                 homeSwitch=True,
                 homing=False,
+                max_tries=2,
             )
             assert self.csc.mock_ctrl.az_actuator.speed == pytest.approx(
                 self.csc.mock_ctrl.az_vel
@@ -390,12 +383,35 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
         self.fail(", ".join(failed_conditions))
 
+    async def set_homed(self):
+        """Set the mock controller state to homed
+
+        and wait for the associated change of state
+        (which only works if it was not already homed).
+
+        This is faster than homing azimuth.
+        """
+        self.csc.mock_ctrl.homed = True
+        await self.assert_next_azimuth_state(
+            state=AzimuthState.NOTINMOTION,
+            homed=True,
+            homing=False,
+        )
+
     async def test_move_azimuth(self):
         async with self.make_csc(
             initial_state=salobj.State.ENABLED, config_dir=None, simulation_mode=1
         ):
             await self.check_initial_az_events()
             await self.assert_next_sample(self.remote.evt_moveCode, code=0)
+
+            # Motion should be rejected because not homed
+            with salobj.assertRaisesAckError():
+                await self.remote.cmd_moveAzimuth.set_start(
+                    azimuth=0, timeout=STD_TIMEOUT
+                )
+
+            await self.set_homed()
 
             # Put the azimuth home switch well away from the current position
             # to avoid extra azimuthState events.
@@ -418,11 +434,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 wrapped_desired_azimuth = utils.angle_wrap_nonnegative(
                     desired_azimuth
                 ).deg
-                # Motion should warn because the azimuth axis is not homed.
-                with self.assertLogs(self.csc.log, logging.WARNING):
-                    await self.remote.cmd_moveAzimuth.set_start(
-                        azimuth=desired_azimuth, timeout=STD_TIMEOUT
-                    )
+                await self.remote.cmd_moveAzimuth.set_start(
+                    azimuth=desired_azimuth, timeout=STD_TIMEOUT
+                )
                 if not isFirst:
                     await self.assert_next_sample(
                         topic=self.remote.evt_azimuthInPosition,
@@ -439,7 +453,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 )
                 await self.assert_next_azimuth_state(
                     state=desired_moving_state,
-                    homed=False,
+                    homed=True,
                     homeSwitch=False,
                     homing=False,
                 )
@@ -468,7 +482,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 # Make sure the final state is as expected.
                 await self.assert_next_azimuth_state(
                     state=AzimuthState.NOTINMOTION,
-                    homed=False,
+                    homed=True,
                     homeSwitch=False,
                     homing=False,
                 )
@@ -1079,6 +1093,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.check_initial_az_events()
             await self.check_initial_shutter_events()
 
+            await self.set_homed()
+
             # Move azimuth and start opening the shutter.
             await self.remote.cmd_moveAzimuth.set_start(
                 azimuth=atdome.INITIAL_AZIMUTH - 10, timeout=STD_TIMEOUT
@@ -1090,7 +1106,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             # Wait for the moves to start.
             await self.assert_next_azimuth_state(
                 state=AzimuthState.MOVINGCCW,
-                homed=False,
+                homed=True,
                 homeSwitch=False,
                 homing=False,
             )
@@ -1115,7 +1131,6 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
             await self.assert_next_azimuth_state(
                 state=AzimuthState.NOTINMOTION,
-                homed=False,
                 homeSwitch=False,
                 homing=False,
             )
@@ -1146,6 +1161,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.check_initial_az_events()
             await self.check_initial_shutter_events()
 
+            await self.set_homed()
+
             # Put the azimuth home switch well away from the current position
             # to avoid extra azimuthState events.
             self.csc.mock_ctrl.home_az = self.distant_azimuth
@@ -1161,7 +1178,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             # Wait for the moves to start.
             await self.assert_next_azimuth_state(
                 state=AzimuthState.MOVINGCCW,
-                homed=False,
+                homed=True,
                 homeSwitch=False,
                 homing=False,
             )
@@ -1190,7 +1207,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
             await self.assert_next_azimuth_state(
                 state=AzimuthState.NOTINMOTION,
-                homed=False,
+                homed=True,
                 homeSwitch=False,
                 homing=False,
             )

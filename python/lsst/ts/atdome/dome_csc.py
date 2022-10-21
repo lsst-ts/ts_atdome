@@ -109,7 +109,6 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         # Set the initial value here, then update from the
         # "Tolerance" reported in long status.
         self.az_tolerance = 1.5
-        self.homing = False
 
         # Task for sleeping in the status loop; cancel this to trigger
         # an immediate status update. Warning: do not cancel status_task
@@ -144,9 +143,6 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         # (which is unlikely to be what the user wants) allow multiple
         # command to run, so the CSC can reject the overlapping commands.
         self.cmd_homeAzimuth.allow_multiple_callbacks = True
-        # Set but don't put azimuthState.homed=False: only homed is maintained
-        # locally; we have no idea of the rest of the state.
-        self.evt_azimuthState.set(homed=False)
 
     async def do_moveAzimuth(self, data):
         """Implement the ``moveAzimuth`` command."""
@@ -154,7 +150,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         if self.evt_azimuthState.data.homing:
             raise salobj.ExpectedError("Cannot move azimuth while homing")
         if not self.evt_azimuthState.data.homed:
-            self.log.warning("The azimuth axis may not be homed.")
+            raise salobj.ExpectedError("The azimuth axis is not homed")
         azimuth = utils.angle_wrap_nonnegative(data.azimuth).deg
         await self.run_command(f"{azimuth:0.3f} MV")
         await self.evt_azimuthCommandedState.set_write(
@@ -213,11 +209,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         """Implement the ``homeAzimuth`` command."""
         self.assert_enabled()
         put_final_azimuth_commanded_state = False
-        if self.evt_azimuthState.data.homing or self.homing:
+        if self.evt_azimuthState.data.homing:
             raise salobj.ExpectedError("Already homing")
         try:
-            self.homing = True
-
             await self.wait_n_status(n=2)
             if bool(self.evt_moveCode.data.code & MoveCode.AZIMUTH_HOMING):
                 raise salobj.ExpectedError("Already homing")
@@ -236,24 +230,22 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             put_final_azimuth_commanded_state = True
             await self.run_command("HM")
             self.status_sleep_task.cancel()
-            # Check status until move code is no longer homing.
-            # Skip one status to start with.
+            # Check status until homed.
+            # Skip one status to start with, to give the dome
+            # time to report that it is homing.
             n_to_await = 2
-            while self.homing:
+            while True:
                 await self.wait_n_status(n=n_to_await)
                 n_to_await = 1
-                # Do not use self.evt_azimuthState.data.homing because
-                # it includes self.homing, which we have set true.
-                self.homing = bool(
-                    self.evt_moveCode.data.code & MoveCode.AZIMUTH_HOMING
-                )
-            await self.evt_azimuthState.set_write(
-                homed=True, homing=False, force_output=True
-            )
+
+                if (
+                    self.evt_azimuthState.data.homed
+                    and not self.evt_azimuthState.data.homing
+                ):
+                    break
         except Exception:
             self.log.exception("homing failed")
         finally:
-            self.homing = False
             if put_final_azimuth_commanded_state:
                 await self.evt_azimuthCommandedState.set_write(
                     commandedState=AzimuthCommandedState.STOP,
@@ -656,7 +648,6 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 self.status_task, timeout=self.config.read_timeout * 2
             )
         await self.stop_mock_ctrl()
-        await self.evt_azimuthState.set_write(homed=False)
 
     async def handle_status(self, lines):
         """Handle output of "?" command.
@@ -693,7 +684,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         await self.evt_moveCode.set_write(code=move_code)
         await self.evt_azimuthState.set_write(
             state=self.compute_az_state(move_code),
-            homing=bool(move_code & MoveCode.AZIMUTH_HOMING) or self.homing,
+            homed=status.homed,
+            homing=bool(move_code & MoveCode.AZIMUTH_HOMING),
             homeSwitch=status.az_home_switch,
         )
 
