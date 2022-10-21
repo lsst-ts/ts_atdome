@@ -1,10 +1,25 @@
-.. py:currentmodule:: lsst.ts.ATDome
+.. py:currentmodule:: lsst.ts.atdome
 
-.. _lsst.ts.ATDome.version_history:
+.. _lsst.ts.atdome.version_history:
 
 ###############
 Version History
 ###############
+
+v1.9.0
+------
+
+* Rename package from ts_ATDome to ts_atdome.
+* Update CI Jenkinsfile to change HOME to WHOME in all sections except cleanup.
+* `ATDomeCsc`: fix going to fault state; add missing awaits.
+
+Requires:
+
+* ts_salobj 6.3
+* ts_simactuators 2
+* ts_utils
+* ts_idl
+* IDL file for ATDome built from ts_xml 11
 
 v1.8.0
 ------

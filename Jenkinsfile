@@ -24,12 +24,12 @@ pipeline {
     }
     environment {
         // Python module name.
-        MODULE_NAME = 'lsst.ts.ATDome'
+        MODULE_NAME = 'lsst.ts.atdome'
         // Space-separated list of SAL component names for all IDL files required.
         IDL_NAMES = 'ATDome'
         // Product name for documentation upload; the associated
         // documentation site is `https://{DOC_PRODUCT_NAME}.lsst.io`.
-        DOC_PRODUCT_NAME = 'ts-atdometrajectory'
+        DOC_PRODUCT_NAME = 'ts-atdome'
 
         WORK_BRANCHES = "${GIT_BRANCH} ${CHANGE_BRANCH} develop"
         LSST_IO_CREDS = credentials('lsst-io')
@@ -38,9 +38,9 @@ pipeline {
     stages {
         stage ('Update branches of required packages') {
             steps {
-                // When using the docker container, we need to change the HOME path
+                // When using the docker container, we need to change the WHOME path
                 // to WORKSPACE to have the authority to install the packages.
-                withEnv(["HOME=${env.WORKSPACE}"]) {
+                withEnv(["WHOME=${env.WORKSPACE}"]) {
                     sh """
                         source /home/saluser/.setup_dev.sh || echo "Loading env failed; continuing..."
 
@@ -82,7 +82,7 @@ pipeline {
         }
         stage('Run unit tests') {
             steps {
-                withEnv(["HOME=${env.WORKSPACE}"]) {
+                withEnv(["WHOME=${env.WORKSPACE}"]) {
                     sh """
                         source /home/saluser/.setup_dev.sh || echo "Loading env failed; continuing..."
                         setup -r .
@@ -93,7 +93,7 @@ pipeline {
         }
         stage('Build documentation') {
             steps {
-                withEnv(["HOME=${env.WORKSPACE}"]) {
+                withEnv(["WHOME=${env.WORKSPACE}"]) {
                     sh """
                         source /home/saluser/.setup_dev.sh || echo "Loading env failed; continuing..."
                         setup -r .
@@ -104,7 +104,7 @@ pipeline {
         }
         stage('Try to upload documentation') {
             steps {
-                withEnv(["HOME=${env.WORKSPACE}"]) {
+                withEnv(["WHOME=${env.WORKSPACE}"]) {
                     catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                         sh '''
                             source /home/saluser/.setup_dev.sh || echo "Loading env failed; continuing..."

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# This file is part of ts_ATDome.
+# This file is part of ts_atdome.
 #
 # Developed for Vera C. Rubin Observatory Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -17,7 +17,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
-from lsst.ts.ATDome import run_atdome
+from lsst.ts.atdome import run_atdome
 
 
 run_atdome()

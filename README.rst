@@ -1,8 +1,8 @@
 #########
-ts_ATDome
+ts_atdome
 #########
 
-``ts_ATDome`` is a Commandable SAL Component (CSC) to control the dome for the auxiliary telescope at the Vera C. Rubin Observatory.
+``ts_atdome`` is a Commandable SAL Component (CSC) to control the dome for the auxiliary telescope at the Vera C. Rubin Observatory.
 
 `Documentation <https://ts-atdome.lsst.io>`_
 
