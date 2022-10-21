@@ -107,7 +107,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertIn("failed", reply_lines[0])
         # Make sure the command is only failed once.
         reply_lines = await self.send_cmd("+")
-        self.assertEqual(len(reply_lines), 25)
+        self.assertEqual(len(reply_lines), 27)
 
     async def test_move_az(self):
         # Test initial conditions; some details of this test

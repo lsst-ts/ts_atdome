@@ -346,7 +346,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 if cmd == "?":
                     # Turn short status into long status
                     cmd = "+"
-                expected_lines = {"+": 25}.get(cmd, 0)  # excluding final ">" line
+                expected_lines = {"+": 27}.get(cmd, 0)  # excluding final ">" line
 
                 read_bytes = await asyncio.wait_for(
                     self.reader.readuntil(b">"), timeout=self.config.read_timeout
