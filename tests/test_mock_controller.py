@@ -75,6 +75,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         assert status.sensor_code == 0
         assert status.az_pos == pytest.approx(atdome.INITIAL_AZIMUTH)
         assert status.move_code == 0
+        assert not status.homed
         assert status.estop_active == self.ctrl.estop_active
         assert status.scb_link_ok == self.ctrl.scb_link_ok
         assert status.rain_sensor_enabled == self.ctrl.rain_sensor_enabled
@@ -130,6 +131,7 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         assert status.move_code == 0
 
     async def test_home_az(self):
+        assert not self.ctrl.homed
         daz = -2
         est_ccw_duration = abs(daz / self.ctrl.az_vel)
         curr_az = self.ctrl.az_actuator.position(utils.current_tai())
@@ -145,6 +147,8 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         status = atdome.Status(reply_lines)
         assert status.move_code == 2 + 64
         assert self.ctrl.az_actuator.speed == pytest.approx(self.ctrl.az_vel)
+        assert not self.ctrl.homed
+        assert not status.homed
 
         # sleep until halfway through CW motion and check status
         await asyncio.sleep(
@@ -154,6 +158,8 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         status = atdome.Status(reply_lines)
         assert status.move_code == 1 + 64
         assert self.ctrl.az_actuator.speed == pytest.approx(self.ctrl.home_az_vel)
+        assert not self.ctrl.homed
+        assert not status.homed
 
         # sleep until we're done and check status
         await asyncio.sleep(self.ctrl.az_actuator.remaining_time() + 0.1)
@@ -164,6 +170,8 @@ class MockTestCase(unittest.IsolatedAsyncioTestCase):
         assert self.ctrl.az_actuator.position(utils.current_tai()) == pytest.approx(
             self.ctrl.home_az
         )
+        assert self.ctrl.homed
+        assert status.homed
 
     async def test_az_home_switch(self):
         daz = -2
