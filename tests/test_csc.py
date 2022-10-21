@@ -26,6 +26,7 @@ import os
 import pathlib
 import unittest
 
+import pytest
 import yaml
 
 from lsst.ts import salobj
@@ -89,7 +90,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 dropoutDoorOpeningPercentage=0,
                 mainDoorOpeningPercentage=0,
             )
-            self.assertAlmostEqual(position.azimuthPosition, atdome.INITIAL_AZIMUTH)
+            assert position.azimuthPosition == pytest.approx(atdome.INITIAL_AZIMUTH)
 
             ctrllr_settings = await self.assert_next_sample(
                 topic=self.remote.evt_settingsAppliedDomeController,
@@ -98,26 +99,26 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 autoShutdownEnabled=mock_ctrl.auto_shutdown_enabled,
                 encoderCountsPer360=mock_ctrl.encoder_counts_per_360,
             )
-            self.assertAlmostEqual(ctrllr_settings.tolerance, mock_ctrl.tolerance)
-            self.assertAlmostEqual(ctrllr_settings.homeAzimuth, mock_ctrl.home_az)
-            self.assertAlmostEqual(
-                ctrllr_settings.highSpeedDistance, mock_ctrl.high_speed
+            assert ctrllr_settings.tolerance == pytest.approx(mock_ctrl.tolerance)
+            assert ctrllr_settings.homeAzimuth == pytest.approx(mock_ctrl.home_az)
+            assert ctrllr_settings.highSpeedDistance == pytest.approx(
+                mock_ctrl.high_speed
             )
-            self.assertAlmostEqual(
-                ctrllr_settings.watchdogTimer, mock_ctrl.watchdog_reset_time
+            assert ctrllr_settings.watchdogTimer == pytest.approx(
+                mock_ctrl.watchdog_reset_time
             )
-            self.assertAlmostEqual(
-                ctrllr_settings.dropoutTimer, mock_ctrl.dropout_timer
+            assert ctrllr_settings.dropoutTimer == pytest.approx(
+                mock_ctrl.dropout_timer
             )
-            self.assertAlmostEqual(
-                ctrllr_settings.reversalDelay, mock_ctrl.reverse_delay
+            assert ctrllr_settings.reversalDelay == pytest.approx(
+                mock_ctrl.reverse_delay
             )
-            self.assertAlmostEqual(ctrllr_settings.coast, mock_ctrl.coast)
-            self.assertAlmostEqual(
-                ctrllr_settings.azimuthMoveTimeout, mock_ctrl.az_move_timeout
+            assert ctrllr_settings.coast == pytest.approx(mock_ctrl.coast)
+            assert ctrllr_settings.azimuthMoveTimeout == pytest.approx(
+                mock_ctrl.az_move_timeout
             )
-            self.assertAlmostEqual(
-                ctrllr_settings.doorMoveTimeout, mock_ctrl.door_move_timeout
+            assert ctrllr_settings.doorMoveTimeout == pytest.approx(
+                mock_ctrl.door_move_timeout
             )
 
             await self.assert_next_sample(
@@ -138,9 +139,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
             # This az_tolerance value after full status has been received
             standard_az_tolerance = self.csc.az_tolerance
-            self.assertAlmostEqual(
-                standard_az_tolerance,
-                self.csc.mock_ctrl.tolerance + self.csc.az_tolerance_margin,
+            assert standard_az_tolerance == pytest.approx(
+                self.csc.mock_ctrl.tolerance + self.csc.az_tolerance_margin
             )
 
             # Increase the Azimuth tolerance in the mock controller and check
@@ -149,23 +149,23 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             self.csc.mock_ctrl.tolerance += delta_tolerance
             await self.remote.tel_position.next(flush=True)
             await self.remote.tel_position.next(flush=True)
-            self.assertAlmostEqual(
-                self.csc.az_tolerance, standard_az_tolerance + delta_tolerance
+            assert self.csc.az_tolerance == pytest.approx(
+                standard_az_tolerance + delta_tolerance
             )
 
     async def test_default_config_dir(self):
         async with self.make_csc(
             initial_state=salobj.State.STANDBY, config_dir=None, simulation_mode=1
         ):
-            self.assertEqual(self.csc.summary_state, salobj.State.STANDBY)
+            assert self.csc.summary_state == salobj.State.STANDBY
             await self.assert_next_summary_state(salobj.State.STANDBY)
 
             desired_config_pkg_name = "ts_config_attcs"
             desired_config_env_name = desired_config_pkg_name.upper() + "_DIR"
             desired_config_pkg_dir = os.environ[desired_config_env_name]
             desired_config_dir = pathlib.Path(desired_config_pkg_dir) / "ATDome/v2"
-            self.assertEqual(self.csc.get_config_pkg(), desired_config_pkg_name)
-            self.assertEqual(self.csc.config_dir, desired_config_dir)
+            assert self.csc.get_config_pkg() == desired_config_pkg_name
+            assert self.csc.config_dir == desired_config_dir
 
     async def test_configuration(self):
         async with self.make_csc(
@@ -173,7 +173,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            self.assertEqual(self.csc.summary_state, salobj.State.STANDBY)
+            assert self.csc.summary_state == salobj.State.STANDBY
             await self.assert_next_summary_state(salobj.State.STANDBY)
 
             invalid_files = glob.glob(os.path.join(TEST_CONFIG_DIR, "invalid_*.yaml"))
@@ -189,14 +189,14 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.remote.cmd_start.set_start(
                 configurationOverride="", timeout=STD_TIMEOUT
             )
-            self.assertEqual(self.csc.summary_state, salobj.State.DISABLED)
+            assert self.csc.summary_state == salobj.State.DISABLED
             await self.assert_next_summary_state(salobj.State.DISABLED)
             all_fields_path = os.path.join(TEST_CONFIG_DIR, "_init.yaml")
             with open(all_fields_path, "r") as f:
                 all_fields_raw = f.read()
             all_fields_data = yaml.safe_load(all_fields_raw)
             for field, value in all_fields_data.items():
-                self.assertEqual(getattr(self.csc.config, field), value)
+                assert getattr(self.csc.config, field) == value
 
     async def test_command_failures(self):
         """Test what happens when the mock controller fails a command."""
@@ -236,7 +236,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 topic=self.remote.evt_azimuthCommandedState,
                 commandedState=AzimuthCommandedState.HOME,
             )
-            self.assertTrue(math.isnan(az_cmd_state.azimuth))
+            assert math.isnan(az_cmd_state.azimuth)
             # Check for MOVINGCCW and homing; this may take up to 2 events.
             await self.assert_next_azimuth_state(
                 state=AzimuthState.MOVINGCCW,
@@ -248,7 +248,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             position = await self.assert_next_sample(
                 topic=self.remote.tel_position, flush=True
             )
-            self.assertGreater(position.azimuthPosition, home_azimuth)
+            assert position.azimuthPosition > home_azimuth
 
             # Check that moveAzimuth and homeAzimuth are rejected while homing.
             with salobj.assertRaisesAckError():
@@ -267,9 +267,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 homing=True,
                 max_tries=2,
             )
-            self.assertAlmostEqual(
-                self.csc.mock_ctrl.az_actuator.speed,
-                self.csc.mock_ctrl.home_az_vel,
+            assert self.csc.mock_ctrl.az_actuator.speed == pytest.approx(
+                self.csc.mock_ctrl.home_az_vel
             )
 
             # Wait for homing motion to finish.
@@ -290,13 +289,13 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 homeSwitch=True,
                 homing=False,
             )
-            self.assertAlmostEqual(
-                self.csc.mock_ctrl.az_actuator.speed, self.csc.mock_ctrl.az_vel
+            assert self.csc.mock_ctrl.az_actuator.speed == pytest.approx(
+                self.csc.mock_ctrl.az_vel
             )
             position = await self.assert_next_sample(
                 topic=self.remote.tel_position, flush=True
             )
-            self.assertAlmostEqual(position.azimuthPosition, home_azimuth)
+            assert position.azimuthPosition == pytest.approx(home_azimuth)
 
     def assert_angle_in_range(self, angle, min_angle, max_angle):
         """Assert that an angle is in the given range.
@@ -405,7 +404,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             # Test an initial condition necessary for this test.
             # If this fails then the first entry in
             # `for desired_azimuth, ...` may need to be updated.
-            self.assertAlmostEqual(atdome.INITIAL_AZIMUTH, 285)
+            assert atdome.INITIAL_AZIMUTH == pytest.approx(285)
 
             # Try several angles, including some not in the range [0, 360);
             # CW direction is towards larger azimuth.
@@ -435,8 +434,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                     topic=self.remote.evt_azimuthCommandedState,
                     commandedState=AzimuthCommandedState.GOTOPOSITION,
                 )
-                self.assertAlmostEqual(
-                    az_cmd_state.azimuth, wrapped_desired_azimuth, delta=FLOAT_DELTA
+                assert az_cmd_state.azimuth == pytest.approx(
+                    wrapped_desired_azimuth, abs=FLOAT_DELTA
                 )
                 await self.assert_next_azimuth_state(
                     state=desired_moving_state,
@@ -474,8 +473,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                     homing=False,
                 )
                 position = self.remote.tel_position.get()
-                self.assertAlmostEqual(
-                    position.azimuthPosition, wrapped_desired_azimuth, delta=FLOAT_DELTA
+                assert position.azimuthPosition == pytest.approx(
+                    wrapped_desired_azimuth, abs=FLOAT_DELTA
                 )
 
                 await self.assert_next_sample(
@@ -536,7 +535,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             # or if both will be reported as done at the same time.
             self.remote.evt_moveCode.flush()
             data = self.remote.evt_moveCode.get()
-            self.assertEqual(data.code, 0)
+            assert data.code == 0
 
             # Close both doors.
             await self.remote.cmd_closeShutter.start(timeout=DOOR_TIMEOUT)
@@ -565,7 +564,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             # so don't check intermediate states.
             self.remote.evt_moveCode.flush()
             data = self.remote.evt_moveCode.get()
-            self.assertEqual(data.code, 0)
+            assert data.code == 0
 
     async def test_move_individual_doors(self):
         """Test the commands that move individual shutter doors.
@@ -1120,7 +1119,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 homeSwitch=False,
                 homing=False,
             )
-            with self.assertRaises(asyncio.TimeoutError):
+            with pytest.raises(asyncio.TimeoutError):
                 await self.remote.evt_azimuthInPosition.next(
                     flush=False, timeout=NODATA_TIMEOUT
                 )
@@ -1195,7 +1194,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 homeSwitch=False,
                 homing=False,
             )
-            with self.assertRaises(asyncio.TimeoutError):
+            with pytest.raises(asyncio.TimeoutError):
                 await self.remote.evt_azimuthInPosition.next(
                     flush=False, timeout=NODATA_TIMEOUT
                 )
@@ -1208,7 +1207,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 dropout_door_state=ShutterDoorState.PARTIALLYOPENED,
                 main_door_state=ShutterDoorState.PARTIALLYOPENED,
             )
-            with self.assertRaises(asyncio.TimeoutError):
+            with pytest.raises(asyncio.TimeoutError):
                 await self.remote.evt_shutterInPosition.next(
                     flush=False, timeout=NODATA_TIMEOUT
                 )
@@ -1238,7 +1237,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             topic=self.remote.evt_azimuthCommandedState,
             commandedState=AzimuthCommandedState.UNKNOWN,
         )
-        self.assertTrue(math.isnan(az_cmd_state.azimuth))
+        assert math.isnan(az_cmd_state.azimuth)
 
         await self.assert_next_azimuth_state(
             state=AzimuthState.NOTINMOTION,
