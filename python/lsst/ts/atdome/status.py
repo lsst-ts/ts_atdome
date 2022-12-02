@@ -59,85 +59,100 @@ class Status:
     """Parsed data of the output from "+", the full status command."""
 
     def __init__(self, lines):
-        if len(lines) != 25:
-            raise RuntimeError(f"Got {len(lines)} lines; need 25")
+        if len(lines) != 27:
+            raise RuntimeError(f"Got {len(lines)} lines; need 27")
 
-        self.main_door_pct = float(parse_get(r"MAIN +[A-Z]+ +(\d+)", lines[0]))
+        lineiter = iter(lines)
 
-        self.dropout_door_pct = float(parse_get(r"DROP +[A-Z]+ +(\d+)", lines[1]))
+        self.main_door_pct = float(parse_get(r"MAIN +[A-Z]+ +(\d+)", next(lineiter)))
 
-        auto_shutdown_match = parse(r"\[(ON|OFF)\] +(\d+)", lines[2])
+        self.dropout_door_pct = float(parse_get(r"DROP +[A-Z]+ +(\d+)", next(lineiter)))
+
+        auto_shutdown_match = parse(r"\[(ON|OFF)\] +(\d+)", next(lineiter))
         self.auto_shutdown_enabled = auto_shutdown_match.group(1) == "ON"
         self.sensor_code = int(auto_shutdown_match.group(2))
 
-        az_pos_match = parse(r"(POSN|HOME) +(\d*\.?\d+)", lines[3])
+        az_pos_match = parse(r"(POSN|HOME) +(\d*\.?\d+)", next(lineiter))
         self.az_home_switch = az_pos_match.group(1) == "HOME"
         self.az_pos = float(az_pos_match.group(2))
 
-        self.move_code = int(parse_get(r"(?:RL|RR|--) +(\d+)", lines[4]))
+        self.move_code = int(parse_get(r"(?:RL|RR|--) +(\d+)", next(lineiter)))
+
+        self.homed = parse_get(r"Dome (not )?homed", next(lineiter)) is None
 
         self.estop_active = bool(
-            int(parse_get(r"Emergency Stop Active: +(\d)", lines[5]))
+            int(parse_get(r"Emergency Stop Active: +(\d)", next(lineiter)))
         )
 
-        self.scb_link_ok = bool(int(parse_get(r"Top Comm Link OK: +(\d)", lines[6])))
+        self.scb_link_ok = bool(
+            int(parse_get(r"Top Comm Link OK: +(\d)", next(lineiter)))
+        )
 
-        self.home_azimuth = float(parse_get(r"Home Azimuth: +(\d*\.?\d+)", lines[7]))
+        self.home_azimuth = float(
+            parse_get(r"Home Azimuth: +(\d*\.?\d+)", next(lineiter))
+        )
 
-        self.high_speed = float(parse_get(r"High Speed.+: +(\d*\.?\d+)", lines[8]))
+        self.high_speed = float(
+            parse_get(r"High Speed.+: +(\d*\.?\d+)", next(lineiter))
+        )
 
-        self.coast = float(parse_get(r"Coast.+: +(\d*\.?\d+)", lines[9]))
+        self.coast = float(parse_get(r"Coast.+: +(\d*\.?\d+)", next(lineiter)))
 
-        self.tolerance = float(parse_get(r"Tolerance.+: +(\d*\.?\d+)", lines[10]))
+        self.tolerance = float(parse_get(r"Tolerance.+: +(\d*\.?\d+)", next(lineiter)))
 
         self.encoder_counts_per_360 = int(
-            parse_get(r"Encoder Counts per 360: +(\d+)", lines[11])
+            parse_get(r"Encoder Counts per 360: +(\d+)", next(lineiter))
         )
 
-        self.encoder_counts = int(parse_get(r"Encoder Counts: +(\d+)", lines[12]))
+        self.encoder_counts = int(parse_get(r"Encoder Counts: +(\d+)", next(lineiter)))
 
         self.last_azimuth_goto = float(
-            parse_get(r"Last Azimuth GoTo: +(\d*\.?\d+)", lines[13])
+            parse_get(r"Last Azimuth GoTo: +(\d*\.?\d+)", next(lineiter))
         )
 
         self.azimuth_move_timeout = float(
-            parse_get(r"Azimuth Move Timeout.+: +(\d*\.?\d+)", lines[14])
+            parse_get(r"Azimuth Move Timeout.+: +(\d*\.?\d+)", next(lineiter))
         )
 
         self.rain_sensor_enabled = bool(
-            int(parse_get(r"Rain-Snow enabled: +(\d)", lines[15]))
+            int(parse_get(r"Rain-Snow enabled: +(\d)", next(lineiter)))
         )
 
         self.cloud_sensor_enabled = bool(
-            int(parse_get(r"Cloud Sensor enabled: +(\d)", lines[16]))
+            int(parse_get(r"Cloud Sensor enabled: +(\d)", next(lineiter)))
         )
 
         self.watchdog_timer = float(
-            parse_get(r"Watchdog Reset Time: +(\d*\.?\d+)", lines[17])
+            parse_get(r"Watchdog Reset Time: +(\d*\.?\d+)", next(lineiter))
         )
 
-        self.dropout_timer = float(parse_get(r"Dropout Timer: +(\d*\.?\d+)", lines[18]))
+        self.dropout_timer = float(
+            parse_get(r"Dropout Timer: +(\d*\.?\d+)", next(lineiter))
+        )
 
         self.reversal_delay = float(
-            parse_get(r"Reverse Delay: +(\d*\.?\d+)", lines[19])
+            parse_get(r"Reverse Delay: +(\d*\.?\d+)", next(lineiter))
         )
 
         self.main_door_encoder_closed = int(
-            parse_get(r"Main Door Encoder Closed: +(\d+)", lines[20])
+            parse_get(r"Main Door Encoder Closed: +(\d+)", next(lineiter))
         )
 
         self.main_door_encoder_opened = int(
-            parse_get(r"Main Door Encoder Opened: +(\d+)", lines[21])
+            parse_get(r"Main Door Encoder Opened: +(\d+)", next(lineiter))
         )
 
         self.dropout_door_encoder_closed = int(
-            parse_get(r"Dropout Encoder Closed: +(\d+)", lines[22])
+            parse_get(r"Dropout Encoder Closed: +(\d+)", next(lineiter))
         )
 
         self.dropout_door_encoder_opened = int(
-            parse_get(r"Dropout Encoder Opened: +(\d+)", lines[23])
+            parse_get(r"Dropout Encoder Opened: +(\d+)", next(lineiter))
         )
 
         self.door_move_timeout = float(
-            parse_get(r"Door Move Timeout.+: +(\d*\.?\d+)", lines[24])
+            parse_get(r"Door Move Timeout.+: +(\d*\.?\d+)", next(lineiter))
         )
+
+        # Ignore the last line, as it is a second (redundant) way of reporting
+        # whether the dome has been homed
