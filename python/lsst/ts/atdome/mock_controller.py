@@ -109,6 +109,7 @@ class MockDomeController:
             speed=az_vel, start_position=INITIAL_AZIMUTH
         )
         self.az_move_timeout = 120
+        self.homed = False
         self.watchdog_reset_time = 600
         self.dropout_timer = 5
         self.reverse_delay = 4
@@ -347,6 +348,7 @@ class MockDomeController:
         if self.estop_active:
             move_code |= MoveCode.ESTOP
         outputs.append(f"{dir_code} {move_code.value:03d}")
+        outputs.append("Dome homed" if self.homed else "Dome not homed")
         return outputs
 
     def do_full_status(self):
@@ -373,6 +375,8 @@ class MockDomeController:
         outputs.append(f"Dropout Encoder Closed: {self.dropout_door_encoder_closed:d}")
         outputs.append(f"Dropout Encoder Opened: {self.dropout_door_encoder_opened:d}")
         outputs.append(f"Door Move Timeout (secs): {self.door_move_timeout}")
+        az_homed_str = "True" if self.homed else "False"
+        outputs.append(f"Dome has been homed: {az_homed_str}")
         return outputs
 
     def do_stop(self):
@@ -410,5 +414,6 @@ class MockDomeController:
             self.az_actuator.speed = self.home_az_vel
             duration = self.set_cmd_az(self.home_az)
             await asyncio.sleep(duration)
+            self.homed = True
         finally:
             self.az_actuator.speed = self.az_vel
