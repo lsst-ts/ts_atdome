@@ -24,14 +24,14 @@ import asyncio
 import enum
 import math
 
-from lsst.ts import salobj
-from lsst.ts import utils
+from lsst.ts import salobj, utils
 from lsst.ts.idl.enums.ATDome import (
     AzimuthCommandedState,
     AzimuthState,
     ShutterDoorCommandedState,
     ShutterDoorState,
 )
+
 from . import __version__
 from .config_schema import CONFIG_SCHEMA
 from .enums import ErrorCode, MoveCode

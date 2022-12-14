@@ -19,5 +19,4 @@
 #
 from lsst.ts.atdome import run_atdome
 
-
 run_atdome()
