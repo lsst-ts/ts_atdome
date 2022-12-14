@@ -211,6 +211,14 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         put_final_azimuth_commanded_state = False
         if self.evt_azimuthState.data.homing:
             raise salobj.ExpectedError("Already homing")
+        if self.evt_azimuthState.data.homeSwitch and self.evt_azimuthState.data.homed:
+            self.log.warning(
+                "Not homing, because already homed and on the home switch, "
+                "and the low-level controller cannot handle that."
+                "If you want to home again, first move the dome off the home switch "
+                "(via a command or the manual push buttons in the dome)."
+            )
+            return
         try:
             await self.wait_n_status(n=2)
             if bool(self.evt_moveCode.data.code & MoveCode.AZIMUTH_HOMING):
