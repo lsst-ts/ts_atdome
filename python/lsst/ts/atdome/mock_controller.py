@@ -25,8 +25,8 @@ import enum
 import functools
 import logging
 
-from lsst.ts import simactuators
-from lsst.ts import utils
+from lsst.ts import simactuators, utils
+
 from .enums import MoveCode
 
 logging.basicConfig()

@@ -22,9 +22,7 @@ import asyncio
 import unittest
 
 import pytest
-
-from lsst.ts import utils
-from lsst.ts import atdome
+from lsst.ts import atdome, utils
 
 
 class MockTestCase(unittest.IsolatedAsyncioTestCase):
