@@ -6,6 +6,22 @@
 Version History
 ###############
 
+v1.10.1
+-------
+
+* `ATDomeCsc`: work around a bug in the low-level controller's home command by not homing if sitting on the homed switch and already homing.
+  We do not yet know what the low-level controller's home command does if the dome is sitting on the homed switch and the dome is not yet homed; so don't do anything special with that case.
+* Run isort
+* Add isort to pre-commit and update other pre-commit software versions.
+
+Requires:
+
+* ts_salobj 6.3
+* ts_simactuators 2
+* ts_utils
+* ts_idl
+* IDL file for ATDome built from ts_xml 11
+
 v1.10.0
 -------
 

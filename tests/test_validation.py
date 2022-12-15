@@ -25,9 +25,7 @@ import unittest
 import jsonschema
 import pytest
 import yaml
-
-from lsst.ts import atdome
-from lsst.ts import salobj
+from lsst.ts import atdome, salobj
 
 TEST_CONFIG_DIR = pathlib.Path(__file__).parent / "data" / "config"
 

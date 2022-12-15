@@ -27,16 +27,13 @@ import unittest
 
 import pytest
 import yaml
-
-from lsst.ts import salobj
-from lsst.ts import utils
+from lsst.ts import atdome, salobj, utils
 from lsst.ts.idl.enums.ATDome import (
     AzimuthCommandedState,
     AzimuthState,
     ShutterDoorCommandedState,
     ShutterDoorState,
 )
-from lsst.ts import atdome
 
 STD_TIMEOUT = 2  # Standard command timeout (sec)
 DOOR_TIMEOUT = 4  # Time limit for shutter door commands (sec)
