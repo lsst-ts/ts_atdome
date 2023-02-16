@@ -6,6 +6,20 @@
 Version History
 ###############
 
+v1.10.2
+-------
+
+* pre-commit: update black to 23.1.0, isort to 5.12.0, mypy to 1.0.0, and pre-commit-hooks to v4.4.0.
+* ``Jenkinsfile``: do not run as root.
+
+Requires:
+
+* ts_salobj 6.3
+* ts_simactuators 2
+* ts_utils
+* ts_idl
+* IDL file for ATDome built from ts_xml 11
+
 v1.10.1
 -------
 
