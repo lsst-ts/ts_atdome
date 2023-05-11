@@ -815,7 +815,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 port = self.mock_port
             else:
                 port = self.config.port
-            self.mock_ctrl = MockDomeController(port=port)
+            self.mock_ctrl = MockDomeController(port=port, log=self.log)
             await asyncio.wait_for(self.mock_ctrl.start(), timeout=2)
         except Exception as e:
             err_msg = "Could not start mock controller"
@@ -874,7 +874,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         mock_ctrl = self.mock_ctrl
         self.mock_ctrl = None
         if mock_ctrl:
-            await mock_ctrl.stop()
+            await mock_ctrl.close()
 
     async def wait_n_status(self, n=2):
         """Wait for the specified number of status."""

@@ -25,7 +25,7 @@ import enum
 import functools
 import logging
 
-from lsst.ts import simactuators, utils
+from lsst.ts import simactuators, tcpip, utils
 
 from .enums import MoveCode
 
@@ -42,7 +42,7 @@ class Door(enum.Flag):
     Dropout = enum.auto()
 
 
-class MockDomeController:
+class MockDomeController(tcpip.OneClientReadLoopServer):
     """Mock DomeController that talks over TCP/IP.
 
     Parameters
@@ -67,11 +67,11 @@ class MockDomeController:
     To start the server:
 
         ctrl = MockDomeController(...)
-        await ctrl.start()
+        await ctrl.start_task
 
     To stop the server:
 
-        await ctrl.stop()
+        await ctrl.close()
 
     Known Limitations:
 
@@ -84,15 +84,13 @@ class MockDomeController:
     def __init__(
         self,
         port,
+        log,
         door_time=1,
         az_vel=6,
         home_az=10,
         home_az_overshoot=1,
         home_az_vel=1,
     ):
-        # If port == 0 then this will be updated to the actual port
-        # in `start`, right after the TCP/IP server is created.
-        self.port = port
         self.door_time = door_time
         self.az_vel = az_vel
         self.high_speed = 5
@@ -141,8 +139,6 @@ class MockDomeController:
         self.fail_command = None
 
         self.last_rot_right = None
-        self.log = logging.getLogger("MockDomeController")
-        self.server = None
 
         # Dict of command: (has_argument, function).
         # The function is called with:
@@ -167,73 +163,57 @@ class MockDomeController:
             "HM": (False, self.do_home),
             "MV": (True, self.do_set_cmd_az),
         }
+        super().__init__(port=port, log=log, terminator=b"\n")
 
-    async def start(self):
-        """Start the TCP/IP server.
+    async def read_loop(self):
+        print(f"read_loop begins; {self.connected=}; {self.port=}")
+        try:
+            await self.write_str("ACE Main Box")
+            await self.write_prompt()
+            await super().read_loop()
+        except Exception as e:
+            print(f"read loop failed: {e!r}")
 
-        Set start_task done and start the command loop.
-        """
-        self.server = await asyncio.start_server(
-            self.cmd_loop, host="127.0.0.1", port=self.port
-        )
-        if self.port == 0:
-            self.port = self.server.sockets[0].getsockname()[1]
-
-    async def stop(self, timeout=5):
-        """Stop the TCP/IP server."""
-        if self.server is None:
-            return
-
-        server = self.server
-        self.server = None
-        server.close()
-        await asyncio.wait_for(server.wait_closed(), timeout=5)
+    async def write_prompt(self):
+        """Write an unterminated ">" prompt."""
+        await self.write(">".encode("utf-8"))
 
     @property
     def homing(self):
         """Is azimuth being homed?"""
         return not self._homing_task.done()
 
-    async def cmd_loop(self, reader, writer):
-        """Execute commands and output replies."""
-        self.log.info("cmd_loop begins")
-        writer.write("ACE Main Box\n>".encode())
-        while True:
-            line = await reader.readline()
-            line = line.decode()
-            if not line:
-                # connection lost; close the writer and exit the loop
-                writer.close()
-                return
-            line = line.strip()
-            self.log.debug(f"read command: {line!r}")
-            if line:
-                try:
-                    items = line.split()
-                    cmd = items[-1]
-                    if cmd not in self.dispatch_dict:
-                        raise KeyError(f"Unsupported command {cmd}")
-                    if cmd == self.fail_command:
-                        self.fail_command = None
-                        outputs = [f"Command {cmd} failed by request"]
-                    else:
-                        has_data, func = self.dispatch_dict[cmd]
-                        desired_len = 2 if has_data else 1
-                        if len(items) != desired_len:
-                            raise RuntimeError(
-                                f"{line} split into {len(items)} pieces; expected {desired_len}"
-                            )
-                        if has_data:
-                            outputs = func(items[0])
-                        else:
-                            outputs = func()
-                    if outputs:
-                        for msg in outputs:
-                            writer.write(f"{msg}\n".encode())
-                except Exception:
-                    self.log.exception(f"command {line} failed")
-            writer.write(">".encode())
-            await writer.drain()
+    async def read_and_dispatch(self):
+        """Read, parse and execute one command and output replies."""
+        data = await self.read_str()
+        self.log.debug(f"read command: {data!r}")
+        if not data:
+            return
+        try:
+            items = data.split()
+            cmd = items[-1]
+            if cmd not in self.dispatch_dict:
+                raise KeyError(f"Unsupported command {cmd}")
+            if cmd == self.fail_command:
+                self.fail_command = None
+                outputs = [f"Command {cmd} failed by request"]
+            else:
+                has_data, func = self.dispatch_dict[cmd]
+                desired_len = 2 if has_data else 1
+                if len(items) != desired_len:
+                    raise RuntimeError(
+                        f"{data} split into {len(items)} pieces; expected {desired_len}"
+                    )
+                if has_data:
+                    outputs = func(items[0])
+                else:
+                    outputs = func()
+            if outputs:
+                for msg in outputs:
+                    await self.write_str(msg)
+        except Exception as e:
+            self.log.exception(f"command {data} failed: {e!r}")
+        await self.write_prompt()
 
     def do_close_doors(self, doors):
         """Close the specified doors.
