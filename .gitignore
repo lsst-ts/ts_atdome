@@ -1,22 +1,15 @@
-.sconsign.dblite
-config.log
-.sconf_temp
-*.o
-*.os
-*.so
-*.cfgc
-*.pyc
+__pycache__
+*.egg
+*.egg-info
 *.log
-
-# Built by sconsUtils
 version.py
 
-# Pytest
+# pytest
 tests/.tests
 pytest_session.txt
-.cache
+.coverage
 .hypothesis
 .pytest_cache
-.coverage
 
+# editors
 .vscode
