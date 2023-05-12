@@ -1337,7 +1337,3 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.assert_next_sample(
                 topic=self.remote.evt_shutterInPosition, inPosition=shutter_in_position
             )
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -20,7 +20,6 @@
 
 import asyncio
 import contextlib
-import unittest
 
 import pytest
 from lsst.ts import atdome, tcpip, utils
@@ -405,7 +404,3 @@ class MockTestCase(tcpip.BaseOneClientServerTestCase):
                 assert status.scb_link_ok == status.scb_link_ok
                 assert status.rain_sensor_enabled == mock_ctrl.rain_sensor_enabled
                 assert status.cloud_sensor_enabled == mock_ctrl.cloud_sensor_enabled
-
-
-if __name__ == "__main__":
-    unittest.main()
