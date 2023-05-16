@@ -28,14 +28,14 @@ test:
     - ts-dds
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
+    - ts-tcpip
   source_files:
     - python
     - bin
     - tests
-    - setup.cfg
     - pyproject.toml
   commands:
-    - py.test
+    - pytest
 
 requirements:
   host:
@@ -50,3 +50,4 @@ requirements:
     - setuptools_scm
     - ts-salobj
     - ts-simactuators
+    - ts-tcpip

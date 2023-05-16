@@ -62,7 +62,3 @@ class ValidationTestCase(unittest.TestCase):
                 del bad_config[field]
                 with pytest.raises(jsonschema.exceptions.ValidationError):
                     self.validator.validate(bad_config)
-
-
-if __name__ == "__main__":
-    unittest.main()

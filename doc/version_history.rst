@@ -6,6 +6,22 @@
 Version History
 ###############
 
+v1.11.0
+-------
+
+* Update to use ts_tcpip.
+* Update to use ts_pre_commit_conf.
+* ``Jenkinsfile``: use new shared library.
+
+Requires:
+
+* ts_salobj 7
+* ts_simactuators 2
+* ts_utils
+* ts_idl
+* ts_tcpip 1.1
+* IDL file for ATDome built from ts_xml 11
+
 v1.10.2
 -------
 
