@@ -90,6 +90,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
     def __init__(
         self,
+        *,
         config_dir=None,
         initial_state=salobj.State.STANDBY,
         simulation_mode=0,
