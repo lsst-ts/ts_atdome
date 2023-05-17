@@ -47,8 +47,10 @@ class MockDomeController(tcpip.OneClientReadLoopServer):
 
     Parameters
     ----------
-    port : int
+    port : `int`
         TCP/IP port. If 0 then pick an available port.
+    host : `str`
+        TCP/IP host. Defaults to tcpip.DEFAULT_LOCALHOST.
     door_time : `float`
         Time to open or close either door (sec)
     az_vel : `float`
@@ -83,8 +85,10 @@ class MockDomeController(tcpip.OneClientReadLoopServer):
 
     def __init__(
         self,
+        *,
         port,
         log,
+        host=tcpip.DEFAULT_LOCALHOST,
         door_time=1,
         az_vel=6,
         home_az=10,
@@ -163,7 +167,7 @@ class MockDomeController(tcpip.OneClientReadLoopServer):
             "HM": (False, self.do_home),
             "MV": (True, self.do_set_cmd_az),
         }
-        super().__init__(port=port, log=log, terminator=b"\n")
+        super().__init__(host=host, port=port, log=log, terminator=b"\n")
 
     async def read_loop(self):
         print(f"read_loop begins; {self.connected=}; {self.port=}")
