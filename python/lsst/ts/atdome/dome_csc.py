@@ -810,7 +810,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             assert self.simulation_mode == 1
             self.mock_ctrl = MockDomeController(port=0, log=self.log)
             await asyncio.wait_for(
-                self.mock_ctrl.start(), timeout=MOCK_CTRL_START_TIMEOUT
+                self.mock_ctrl.start_task, timeout=MOCK_CTRL_START_TIMEOUT
             )
         except Exception as e:
             err_msg = "Could not start mock controller"
