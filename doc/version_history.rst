@@ -17,6 +17,15 @@ v1.11.1
     * When logging an exception: include the exception text in the main message.
       This duplicates information but makes it easier to find the information.
 
+Requires:
+
+* ts_salobj 7
+* ts_simactuators 2
+* ts_utils
+* ts_idl
+* ts_tcpip 1.1
+* IDL file for ATDome built from ts_xml 11
+
 v1.11.0
 -------
 
