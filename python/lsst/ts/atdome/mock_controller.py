@@ -166,13 +166,12 @@ class MockDomeController(tcpip.OneClientReadLoopServer):
         super().__init__(port=port, log=log, terminator=b"\n")
 
     async def read_loop(self):
-        print(f"read_loop begins; {self.connected=}; {self.port=}")
         try:
             await self.write_str("ACE Main Box")
             await self.write_prompt()
             await super().read_loop()
         except Exception as e:
-            print(f"read loop failed: {e!r}")
+            self.log.exception(f"read loop failed: {e!r}")
 
     async def write_prompt(self):
         """Write an unterminated ">" prompt."""
@@ -212,7 +211,7 @@ class MockDomeController(tcpip.OneClientReadLoopServer):
                 for msg in outputs:
                     await self.write_str(msg)
         except Exception as e:
-            self.log.exception(f"command {data} failed: {e!r}")
+            self.log.exception(f"command {data} failed; continuing: {e!r}")
         await self.write_prompt()
 
     def do_close_doors(self, doors):
