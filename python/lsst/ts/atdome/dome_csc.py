@@ -24,7 +24,7 @@ import asyncio
 import enum
 import math
 
-from lsst.ts import salobj, utils
+from lsst.ts import salobj, tcpip, utils
 from lsst.ts.idl.enums.ATDome import (
     AzimuthCommandedState,
     AzimuthState,
@@ -38,8 +38,11 @@ from .enums import ErrorCode, MoveCode
 from .mock_controller import MockDomeController
 from .status import Status
 
-# Max time to home the azimuth (sec)
+# Max time (sec) to home the azimuth.
 HOME_AZIMUTH_TIMEOUT = 150
+
+# Max time (sec) to wait for the mock controller to start.
+MOCK_CTRL_START_TIMEOUT = 2
 
 
 class Axis(enum.Flag):
@@ -59,10 +62,6 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         the default.
     simulation_mode : `int` (optional)
         Simulation mode.
-    mock_port : `int` or `None` (optional)
-        Port for mock controller TCP/IP interface. If `None` then use the
-        port specified by the configuration. If 0 then pick an available port.
-        Only used in simulation mode.
 
     Raises
     ------
@@ -93,10 +92,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         config_dir=None,
         initial_state=salobj.State.STANDBY,
         simulation_mode=0,
-        mock_port=None,
     ):
-        self.reader = None
-        self.writer = None
         self.move_code = 0
         self.mock_ctrl = None  # mock controller, or None of not constructed
         self.status_interval = 0.2  # delay between short status commands (sec)
@@ -128,7 +124,6 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.desired_dropout_shutter_state = None
         self.cmd_lock = asyncio.Lock()
         self.config = None
-        self.mock_port = mock_port
         self.status_event = asyncio.Event()
         super().__init__(
             name="ATDome",
@@ -138,6 +133,11 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             initial_state=initial_state,
             simulation_mode=simulation_mode,
         )
+
+        # TCP/IP client for the low-level controller.
+        # Initialize to a client that is already closed, to avoid
+        # having to test for "is None".
+        self.client = tcpip.Client(host="", port=0, log=self.log)
 
         # Homing can be slow; rather than queue up these commands
         # (which is unlikely to be what the user wants) allow multiple
@@ -251,8 +251,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                     and not self.evt_azimuthState.data.homing
                 ):
                     break
-        except Exception:
-            self.log.exception("homing failed")
+        except Exception as e:
+            self.log.exception(f"homing failed: {e!r}")
         finally:
             if put_final_azimuth_commanded_state:
                 await self.evt_azimuthCommandedState.set_write(
@@ -330,56 +330,35 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             and goes into FAULT state.
             If the wrong number of lines is read. Also a warning is logged.
         """
-        if not self.connected:
+        if not self.client.connected:
             if self.disabled_or_enabled and not self.connect_task.done():
                 await self.connect_task
             else:
                 raise RuntimeError("Not connected and not trying to connect")
 
         async with self.cmd_lock:
-            self.writer.write(f"{cmd}\r\n".encode())
-            try:
-                await self.writer.drain()
-                if not self.connected:
-                    return
+            if cmd == "?":
+                # Turn short status into long status
+                cmd = "+"
+            await self.client.write_str(cmd)
+            # Compute expected number of lines, ignoring the final prompt.
+            expected_lines = 27 if cmd == "+" else 0
 
-                if cmd == "?":
-                    # Turn short status into long status
-                    cmd = "+"
-                expected_lines = {"+": 27}.get(cmd, 0)  # excluding final ">" line
-
-                read_bytes = await asyncio.wait_for(
-                    self.reader.readuntil(b">"), timeout=self.config.read_timeout
-                )
-                if not self.connected:
-                    return
-            except Exception as e:
-                if not self.connected:
-                    # Disconnecting; ignore communication errors
-                    return
-
-                if isinstance(e, asyncio.streams.IncompleteReadError):
-                    err_msg = "TCP/IP connection lost"
-                    self.log.error(err_msg)
-                else:
-                    err_msg = "TCP/IP writer or read failed"
-                    self.log.exception(err_msg)
-                await self.disconnect()
-                await self.fault(
-                    code=ErrorCode.TCPIP_READ_ERROR, report=f"{err_msg}: {e}"
-                )
-                raise salobj.ExpectedError(err_msg)
-
+            read_bytes = await asyncio.wait_for(
+                self.client.readuntil(b">"), timeout=self.config.read_timeout
+            )
             data = read_bytes.decode()
-            lines = data.split("\n")[:-1]  # strip final > line
-            lines = [elt.strip() for elt in lines]
+            # Break into lines, dropping the final line
+            # (which is just the prompt).
+            lines = [elt.strip() for elt in data.split("\n")[:-1]]
             if len(lines) != expected_lines:
                 err_msg = (
-                    f"Command {cmd} returned {data!r}; expected {expected_lines} lines"
+                    f"Command {cmd} returned {len(lines)} lines "
+                    f"instead of {expected_lines}; read: {data!r}"
                 )
                 self.log.error(err_msg)
                 raise salobj.ExpectedError(err_msg)
-            elif cmd == "+":
+            if cmd == "+":
                 await self.handle_status(lines)
 
     def compute_in_position_mask(self, move_code):
@@ -548,51 +527,33 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.log.debug("connect")
         if self.config is None:
             raise RuntimeError("Not yet configured")
-        if self.connected:
+        if self.client.connected:
             raise RuntimeError("Already connected")
-        host = salobj.LOCAL_HOST if self.simulation_mode == 1 else self.config.host
-        if self.simulation_mode == 1:
+        if self.simulation_mode != 0:
             await self.start_mock_ctrl()
-            host = salobj.LOCAL_HOST
+            host = self.mock_ctrl.host
+            port = self.mock_ctrl.port
         else:
             host = self.config.host
+            port = self.config.port
         try:
             async with self.cmd_lock:
-                if self.simulation_mode != 0:
-                    if self.mock_ctrl is None:
-                        raise RuntimeError(
-                            "In simulation mode but no mock controller found."
-                        )
-                    port = self.mock_ctrl.port
-                else:
-                    port = self.config.port
-                connect_coro = asyncio.open_connection(host=host, port=port)
-                self.reader, self.writer = await asyncio.wait_for(
-                    connect_coro, timeout=self.config.connection_timeout
+                self.client = tcpip.Client(host=host, port=port, log=self.log)
+                await asyncio.wait_for(
+                    self.client.start_task, timeout=self.config.connection_timeout
                 )
                 # drop welcome message
                 await asyncio.wait_for(
-                    self.reader.readuntil(">".encode()),
-                    timeout=self.config.read_timeout,
+                    self.client.readuntil(b">"), timeout=self.config.read_timeout
                 )
             self.log.debug("connected")
         except Exception as e:
-            err_msg = (
-                f"Could not open connection to host={host}, port={self.config.port}"
-            )
+            err_msg = f"Could not open connection to host={host}, port={port}: {e!r}"
             self.log.exception(err_msg)
-            await self.fault(
-                code=ErrorCode.TCPIP_CONNECT_ERROR, report=f"{err_msg}: {e}"
-            )
+            await self.fault(code=ErrorCode.TCPIP_CONNECT_ERROR, report=err_msg)
             return
 
         self.status_task = asyncio.ensure_future(self.status_loop())
-
-    @property
-    def connected(self):
-        if None in (self.reader, self.writer):
-            return False
-        return True
 
     async def end_disable(self, data):
         """End do_disable; called after state changes
@@ -606,7 +567,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             Command data
         """
         self.shutter_task.cancel()
-        if not self.connected:
+        if not self.client.connected:
             # this should never happen, but be paranoid
             return
 
@@ -641,16 +602,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         """
         self.log.debug("disconnect")
         self.connect_task.cancel()
-        writer = self.writer
-        self.reader = None
-        self.writer = None
-        if writer:
-            try:
-                writer.write_eof()
-                await asyncio.wait_for(writer.drain(), timeout=2)
-            finally:
-                writer.close()
         self.status_sleep_task.cancel()
+        await self.client.close()
         if not self.status_task.done():
             await asyncio.wait_for(
                 self.status_task, timeout=self.config.read_timeout * 2
@@ -811,23 +764,21 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         """
         try:
             assert self.simulation_mode == 1
-            if self.mock_port is not None:
-                port = self.mock_port
-            else:
-                port = self.config.port
-            self.mock_ctrl = MockDomeController(port=port, log=self.log)
-            await asyncio.wait_for(self.mock_ctrl.start(), timeout=2)
+            self.mock_ctrl = MockDomeController(port=0, log=self.log)
+            await asyncio.wait_for(
+                self.mock_ctrl.start_task, timeout=MOCK_CTRL_START_TIMEOUT
+            )
         except Exception as e:
-            err_msg = "Could not start mock controller"
-            self.log.exception(e)
+            err_msg = f"Could not start mock controller: {e!r}"
+            self.log.exception(err_msg)
             await self.fault(
-                code=ErrorCode.CANNOT_START_MOCK_CONTROLLER, report=f"{err_msg}: {e}"
+                code=ErrorCode.CANNOT_START_MOCK_CONTROLLER, report=err_msg
             )
             raise
 
     async def handle_summary_state(self):
         if self.disabled_or_enabled:
-            if not self.connected and self.connect_task.done():
+            if not self.client.connected and self.connect_task.done():
                 await self.connect()
         else:
             await self.disconnect()
@@ -849,11 +800,13 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     async def status_loop(self):
         """Read and report status from the TCP/IP controller."""
         self.status_sleep_task.cancel()
-        while self.connected:
+        while self.client.connected:
             try:
                 await self.run_command("+")
-            except Exception:
-                self.log.exception("Status request failed; status loop continues")
+            except Exception as e:
+                self.log.exception(
+                    f"Status request failed; status loop continues: {e!r}"
+                )
             try:
                 self.status_sleep_task = asyncio.ensure_future(
                     asyncio.sleep(self.status_interval)

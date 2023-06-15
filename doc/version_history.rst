@@ -6,6 +6,17 @@
 Version History
 ###############
 
+v1.11.1
+-------
+
+* `ATDomeCsc`:
+
+    * Remove the ``mock_port`` constructor argument; always use 0 (pick a free port).
+    * In simulation mode do not start the mock controller server a second time.
+    * Use lsst.ts.tcpip.Client instead of a bare reader and writer to talk to the low-level controller.
+    * When logging an exception: include the exception text in the main message.
+      This duplicates information but makes it easier to find the information.
+
 v1.11.0
 -------
 
