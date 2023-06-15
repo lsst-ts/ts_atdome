@@ -38,8 +38,11 @@ from .enums import ErrorCode, MoveCode
 from .mock_controller import MockDomeController
 from .status import Status
 
-# Max time to home the azimuth (sec)
+# Max time (sec) to home the azimuth.
 HOME_AZIMUTH_TIMEOUT = 150
+
+# Max time (sec) to wait for the mock controller to start.
+MOCK_CTRL_START_TIMEOUT = 2
 
 
 class Axis(enum.Flag):
@@ -59,10 +62,6 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         the default.
     simulation_mode : `int` (optional)
         Simulation mode.
-    mock_port : `int` or `None` (optional)
-        Port for mock controller TCP/IP interface. If `None` then use the
-        port specified by the configuration. If 0 then pick an available port.
-        Only used in simulation mode.
 
     Raises
     ------
@@ -93,7 +92,6 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         config_dir=None,
         initial_state=salobj.State.STANDBY,
         simulation_mode=0,
-        mock_port=None,
     ):
         self.reader = None
         self.writer = None
@@ -128,7 +126,6 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.desired_dropout_shutter_state = None
         self.cmd_lock = asyncio.Lock()
         self.config = None
-        self.mock_port = mock_port
         self.status_event = asyncio.Event()
         super().__init__(
             name="ATDome",
@@ -811,12 +808,10 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         """
         try:
             assert self.simulation_mode == 1
-            if self.mock_port is not None:
-                port = self.mock_port
-            else:
-                port = self.config.port
-            self.mock_ctrl = MockDomeController(port=port, log=self.log)
-            await asyncio.wait_for(self.mock_ctrl.start(), timeout=2)
+            self.mock_ctrl = MockDomeController(port=0, log=self.log)
+            await asyncio.wait_for(
+                self.mock_ctrl.start(), timeout=MOCK_CTRL_START_TIMEOUT
+            )
         except Exception as e:
             err_msg = "Could not start mock controller"
             self.log.exception(e)
