@@ -44,6 +44,11 @@ FLOAT_DELTA = 1e-4  # Delta to use when comparing two float angles
 
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls._randomize_topic_subname = True
+
     def setUp(self):
         super().setUp()
         # An azimuth well away from the initial azimuth.
