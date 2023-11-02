@@ -358,7 +358,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         """
         assert max_tries > 0
         for n in range(max_tries):
-            data = await self.remote.evt_azimuthState.next(flush=False, timeout=timeout)
+            data = await self.assert_next_sample(
+                self.remote.evt_azimuthState, flush=False, timeout=timeout
+            )
             failed_conditions = []
             if state is not None and data.state != state:
                 failed_conditions.append(f"state={data.state} != {state!r}")
