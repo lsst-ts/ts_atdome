@@ -6,6 +6,12 @@
 Version History
 ###############
 
+v1.11.2
+-------
+
+* In ``tests/test_csc.py``, update ``assert_next_azimuth_state`` to use ``assert_next_sample`` to retrieve the sample.
+  This allows the test to reliably work with the Kafka version of salobj as it handles discarding old samples.
+
 v1.11.1
 -------
 
