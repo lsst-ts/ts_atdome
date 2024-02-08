@@ -279,9 +279,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             await self.run_command("UP")
 
         await self.wait_for_shutter(
-            dropout_state=ShutterDoorState.OPENED
-            if data.open
-            else ShutterDoorState.CLOSED,
+            dropout_state=(
+                ShutterDoorState.OPENED if data.open else ShutterDoorState.CLOSED
+            ),
             main_state=None,
         )
 
@@ -309,9 +309,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
         await self.wait_for_shutter(
             dropout_state=None,
-            main_state=ShutterDoorState.OPENED
-            if data.open
-            else ShutterDoorState.CLOSED,
+            main_state=(
+                ShutterDoorState.OPENED if data.open else ShutterDoorState.CLOSED
+            ),
         )
 
     async def run_command(self, cmd):
