@@ -880,7 +880,10 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.log.debug(
             f"Starting azimuth motion handler; {dome_current_position=}, {position=}."
         )
-        while utils.angle_diff(dome_current_position, position).deg > self.az_tolerance:
+        while (
+            abs(utils.angle_diff(dome_current_position, position).deg)
+            > self.az_tolerance
+        ):
             await asyncio.sleep(self.status_interval * 4)
             dome_new_position = self.tel_position.data.azimuthPosition
             if (
