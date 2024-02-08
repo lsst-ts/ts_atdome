@@ -887,7 +887,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             await asyncio.sleep(self.status_interval * 4)
             dome_new_position = self.tel_position.data.azimuthPosition
             if (
-                utils.angle_diff(dome_current_position, dome_new_position).deg
+                abs(utils.angle_diff(dome_current_position, dome_new_position).deg)
                 < self.az_move_tol
             ):
                 dome_move_below_threshold += 1
