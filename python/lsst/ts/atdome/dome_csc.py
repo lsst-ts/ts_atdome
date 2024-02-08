@@ -872,12 +872,13 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             The desired position of the dome.
         """
 
+        await asyncio.sleep(self.status_interval * 4)
         dome_current_position = self.tel_position.data.azimuthPosition
         dome_move_below_threshold = 0
         total_retries = 0
 
         self.log.debug(
-            "Starting azimuth motion handler; {dome_current_position=}, {position=}."
+            f"Starting azimuth motion handler; {dome_current_position=}, {position=}."
         )
         while utils.angle_diff(dome_current_position, position).deg > self.az_tolerance:
             await asyncio.sleep(self.status_interval * 4)
