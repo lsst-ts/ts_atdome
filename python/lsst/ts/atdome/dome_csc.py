@@ -105,6 +105,8 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         # Set the initial value here, then update from the
         # "Tolerance" reported in long status.
         self.az_tolerance = 1.5
+        self.max_dome_move_below_threshold = 3
+        self.az_move_tol = 0.1
 
         # Task for sleeping in the status loop; cancel this to trigger
         # an immediate status update. Warning: do not cancel status_task
@@ -117,6 +119,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         self.connect_task = utils.make_done_future()
         # Task that waits while shutter doors move
         self.shutter_task = utils.make_done_future()
+        # Task that waits for dome to move to position and retries
+        # operation if it fails.
+        self.move_azimuth_task = utils.make_done_future()
         # The conditions that self.shutter_task is waiting for.
         # Must be one of: ShutterDoorState.OPENED,
         # ShutterDoorState.CLOSED or None (for don't care)
@@ -151,6 +156,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             raise salobj.ExpectedError("Cannot move azimuth while homing")
         if not self.evt_azimuthState.data.homed:
             raise salobj.ExpectedError("The azimuth axis is not homed")
+        await self._stop_move_az_task()
         azimuth = utils.angle_wrap_nonnegative(data.azimuth).deg
         await self.run_command(f"{azimuth:0.3f} MV")
         await self.evt_azimuthCommandedState.set_write(
@@ -159,11 +165,15 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             force_output=True,
         )
         self.status_sleep_task.cancel()
+        self.move_azimuth_task = asyncio.create_task(
+            self._handle_azimuth_move(position=azimuth)
+        )
 
     async def do_closeShutter(self, data):
         """Implement the ``closeShutter`` command."""
         self.assert_enabled()
         self.shutter_task.cancel()
+        await self._stop_move_az_task()
         await self.run_command("SC")
         await self.evt_dropoutDoorCommandedState.set_write(
             commandedState=ShutterDoorCommandedState.CLOSED, force_output=True
@@ -178,6 +188,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     async def do_openShutter(self, data):
         """Implement the ``openShutter`` command."""
         self.assert_enabled()
+        await self._stop_move_az_task()
         await self.run_command("SO")
         await self.evt_dropoutDoorCommandedState.set_write(
             commandedState=ShutterDoorCommandedState.OPENED, force_output=True
@@ -192,6 +203,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     async def do_stopMotion(self, data):
         """Implement the ``stopMotion`` command."""
         self.assert_enabled()
+        await self._stop_move_az_task()
         await self.evt_azimuthCommandedState.set_write(
             commandedState=AzimuthCommandedState.STOP, force_output=True
         )
@@ -208,6 +220,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     async def do_homeAzimuth(self, data):
         """Implement the ``homeAzimuth`` command."""
         self.assert_enabled()
+        await self._stop_move_az_task()
         put_final_azimuth_commanded_state = False
         if self.evt_azimuthState.data.homing:
             raise salobj.ExpectedError("Already homing")
@@ -263,6 +276,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
     async def do_moveShutterDropoutDoor(self, data):
         """Implement the ``moveShutterDropoutDoor`` command."""
         self.assert_enabled()
+        await self._stop_move_az_task()
         if self.evt_mainDoorState.data.state != ShutterDoorState.OPENED:
             raise salobj.ExpectedError(
                 "Cannot move the dropout door until the main door is fully open."
@@ -279,15 +293,16 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             await self.run_command("UP")
 
         await self.wait_for_shutter(
-            dropout_state=ShutterDoorState.OPENED
-            if data.open
-            else ShutterDoorState.CLOSED,
+            dropout_state=(
+                ShutterDoorState.OPENED if data.open else ShutterDoorState.CLOSED
+            ),
             main_state=None,
         )
 
     async def do_moveShutterMainDoor(self, data):
         """Implement the ``moveShutterMainDoor`` command."""
         self.assert_enabled()
+        await self._stop_move_az_task()
         if data.open:
             await self.evt_mainDoorCommandedState.set_write(
                 commandedState=ShutterDoorCommandedState.OPENED, force_output=True
@@ -309,9 +324,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
         await self.wait_for_shutter(
             dropout_state=None,
-            main_state=ShutterDoorState.OPENED
-            if data.open
-            else ShutterDoorState.CLOSED,
+            main_state=(
+                ShutterDoorState.OPENED if data.open else ShutterDoorState.CLOSED
+            ),
         )
 
     async def run_command(self, cmd):
@@ -819,6 +834,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         """Disconnect from the TCP/IP controller, if connected, and stop
         the mock controller, if running.
         """
+        await self._stop_move_az_task()
         await super().close_tasks()
         await self.disconnect()
 
@@ -834,6 +850,71 @@ class ATDomeCsc(salobj.ConfigurableCsc):
         for i in range(n):
             self.status_event.clear()
             await self.status_event.wait()
+
+    async def _handle_azimuth_move(self, position):
+        """Handle azimuth move.
+
+        This coroutine will monitor the position of the dome and make
+        sure the dome is moving towards the specified position. If the
+        dome stops before arriving in position, it will send the move
+        command again.
+
+        Parameters
+        ----------
+        position : `float`
+            The desired position of the dome.
+        """
+
+        await asyncio.sleep(self.status_interval * 4)
+        dome_current_position = self.tel_position.data.azimuthPosition
+        dome_move_below_threshold = 0
+        total_retries = 0
+
+        self.log.debug(
+            f"Starting azimuth motion handler; {dome_current_position=}, {position=}."
+        )
+        while (
+            abs(utils.angle_diff(dome_current_position, position).deg)
+            > self.az_tolerance
+        ):
+            await asyncio.sleep(self.status_interval * 4)
+            dome_new_position = self.tel_position.data.azimuthPosition
+            if (
+                abs(utils.angle_diff(dome_current_position, dome_new_position).deg)
+                < self.az_move_tol
+            ):
+                dome_move_below_threshold += 1
+                self.log.debug(
+                    f"Dome did not move substantially {dome_move_below_threshold=}; "
+                    f"{dome_current_position=}, {dome_new_position}."
+                )
+            else:
+                dome_move_below_threshold = 0
+            dome_current_position = dome_new_position
+            if dome_move_below_threshold > self.max_dome_move_below_threshold:
+                self.log.info(
+                    "Dome is not moving, resending move command: "
+                    f"{dome_current_position=} {position=}."
+                )
+                dome_move_below_threshold = 0
+                total_retries += 1
+                await self.run_command(f"{position:0.3f} MV")
+
+        self.log.debug(
+            f"Dome arrived in {position=}; {total_retries=}. Done monitoring loop."
+        )
+
+    async def _stop_move_az_task(self):
+
+        if not self.move_azimuth_task.done():
+            self.log.debug("Dome move task active; stopping.")
+            self.move_azimuth_task.cancel()
+            try:
+                await self.move_azimuth_task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                self.log.exception("Error cancelling background move task.")
 
 
 def run_atdome():

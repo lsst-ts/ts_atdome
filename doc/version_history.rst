@@ -6,6 +6,17 @@
 Version History
 ###############
 
+v1.11.3
+-------
+
+* Add work around to dome controller stopping before arriving in position.
+
+  We are currently investigating this issue, but in the meantime we will add this workaround.
+  Basically, for every move command the CSC starts a background task that monitors the position of the dome.
+  If the dome stops, the background task reissue the move command, and continues to monitor the position until the dome arrives.
+
+  This should be removed once the issue is resolved (OBS-89)
+
 v1.11.2
 -------
 
