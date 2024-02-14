@@ -357,7 +357,13 @@ class ATDomeCsc(salobj.ConfigurableCsc):
                 cmd = "+"
             await self.client.write_str(cmd)
             # Compute expected number of lines, ignoring the final prompt.
-            expected_lines = 27 if cmd == "+" else 0
+            expected_lines = (
+                {25, 27}
+                if cmd == "+"
+                else {
+                    0,
+                }
+            )
 
             read_bytes = await asyncio.wait_for(
                 self.client.readuntil(b">"), timeout=self.config.read_timeout
@@ -366,7 +372,7 @@ class ATDomeCsc(salobj.ConfigurableCsc):
             # Break into lines, dropping the final line
             # (which is just the prompt).
             lines = [elt.strip() for elt in data.split("\n")[:-1]]
-            if len(lines) != expected_lines:
+            if len(lines) not in expected_lines:
                 err_msg = (
                     f"Command {cmd} returned {len(lines)} lines "
                     f"instead of {expected_lines}; read: {data!r}"
