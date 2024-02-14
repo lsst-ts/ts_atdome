@@ -59,8 +59,8 @@ class Status:
     """Parsed data of the output from "+", the full status command."""
 
     def __init__(self, lines):
-        if len(lines) != 27:
-            raise RuntimeError(f"Got {len(lines)} lines; need 27")
+        if len(lines) not in {25, 27}:
+            raise RuntimeError(f"Got {len(lines)} lines; need 25 or 27.")
 
         lineiter = iter(lines)
 
@@ -78,7 +78,10 @@ class Status:
 
         self.move_code = int(parse_get(r"(?:RL|RR|--) +(\d+)", next(lineiter)))
 
-        self.homed = parse_get(r"Dome (not )?homed", next(lineiter)) is None
+        if len(lines) == 27:
+            self.homed = parse_get(r"Dome (not )?homed", next(lineiter)) is None
+        else:
+            self.homed = True
 
         self.estop_active = bool(
             int(parse_get(r"Emergency Stop Active: +(\d)", next(lineiter)))
