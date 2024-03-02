@@ -85,7 +85,7 @@ class MockDomeController(tcpip.OneClientReadLoopServer):
         self,
         port,
         log,
-        door_time=1,
+        door_time=5,
         az_vel=6,
         home_az=10,
         home_az_overshoot=1,
