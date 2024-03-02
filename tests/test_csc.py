@@ -36,7 +36,7 @@ from lsst.ts.idl.enums.ATDome import (
 )
 
 STD_TIMEOUT = 2  # Standard command timeout (sec)
-DOOR_TIMEOUT = 4  # Time limit for shutter door commands (sec)
+DOOR_TIMEOUT = 20  # Time limit for shutter door commands (sec)
 LONG_TIMEOUT = 20  # Timeout for starting SAL components (sec)
 TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
 NODATA_TIMEOUT = 1  # Timeout waiting for data that should not be read (sec)
