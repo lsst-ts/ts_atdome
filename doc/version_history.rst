@@ -6,6 +6,20 @@
 Version History
 ###############
 
+v1.11.4
+-------
+
+* Update the version of ts-conda-build to 0.4 in the conda recipe.
+
+Requires:
+
+* ts_salobj 7
+* ts_simactuators 2
+* ts_utils
+* ts_idl
+* ts_tcpip 1.1
+* IDL file for ATDome built from ts_xml 11
+
 v1.11.3
 -------
 
@@ -17,11 +31,29 @@ v1.11.3
 
   This should be removed once the issue is resolved (OBS-89)
 
+Requires:
+
+* ts_salobj 7
+* ts_simactuators 2
+* ts_utils
+* ts_idl
+* ts_tcpip 1.1
+* IDL file for ATDome built from ts_xml 11
+
 v1.11.2
 -------
 
 * In ``tests/test_csc.py``, update ``assert_next_azimuth_state`` to use ``assert_next_sample`` to retrieve the sample.
   This allows the test to reliably work with the Kafka version of salobj as it handles discarding old samples.
+
+Requires:
+
+* ts_salobj 7
+* ts_simactuators 2
+* ts_utils
+* ts_idl
+* ts_tcpip 1.1
+* IDL file for ATDome built from ts_xml 11
 
 v1.11.1
 -------
