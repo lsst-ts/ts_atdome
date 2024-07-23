@@ -25,7 +25,7 @@ import yaml
 CONFIG_SCHEMA = yaml.safe_load(
     """
 $schema: http://json-schema.org/draft-07/schema#
-$id: https://github.com/lsst-ts/ts_atdome/blob/main/python/lsst/ts/atdome/schema_config.py
+$id: https://github.com/lsst-ts/ts_atdome/blob/main/python/lsst/ts/atdome/config_schema.py
 # title must end with one or more spaces followed by the schema version, which must begin with "v"
 title: ATDome v2
 description: Schema for ATDome configuration files
