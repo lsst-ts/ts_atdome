@@ -6,6 +6,22 @@
 Version History
 ###############
 
+v1.11.5
+-------
+
+* Fix version module import.
+* Fix typo in the config schema.
+* Replace all uses of ts_idl with ts_xml.
+
+Requires:
+
+* ts_salobj 7
+* ts_simactuators 2
+* ts_utils
+* ts_idl
+* ts_tcpip 1.1
+* IDL file for ATDome built from ts_xml 11
+
 v1.11.4
 -------
 
