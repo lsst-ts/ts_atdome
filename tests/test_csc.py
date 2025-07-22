@@ -28,7 +28,7 @@ import unittest
 import pytest
 import yaml
 from lsst.ts import atdome, salobj, utils
-from lsst.ts.idl.enums.ATDome import (
+from lsst.ts.xml.enums.ATDome import (
     AzimuthCommandedState,
     AzimuthState,
     ShutterDoorCommandedState,

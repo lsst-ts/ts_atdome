@@ -25,7 +25,7 @@ import enum
 import math
 
 from lsst.ts import salobj, tcpip, utils
-from lsst.ts.idl.enums.ATDome import (
+from lsst.ts.xml.enums.ATDome import (
     AzimuthCommandedState,
     AzimuthState,
     ShutterDoorCommandedState,
@@ -745,9 +745,9 @@ class ATDomeCsc(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        dropout_state : `lsst.ts.idl.enums.ATDome.ShutterDoorState` or `None`
+        dropout_state : `lsst.ts.xml.enums.ATDome.ShutterDoorState` or `None`
             Desired state of dropout door.
-        main_state : `lsst.ts.idl.enums.ATDome.ShutterDoorState` or `None`
+        main_state : `lsst.ts.xml.enums.ATDome.ShutterDoorState` or `None`
             Desired state of main door.
 
         Notes
