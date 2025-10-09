@@ -6,6 +6,11 @@
 Version History
 ###############
 
+v1.11.6
+-------
+
+* Update ts-conda-build dependency version and conda build string.
+
 v1.11.5
 -------
 
@@ -18,9 +23,8 @@ Requires:
 * ts_salobj 7
 * ts_simactuators 2
 * ts_utils
-* ts_idl
+* ts_xml
 * ts_tcpip 1.1
-* IDL file for ATDome built from ts_xml 11
 
 v1.11.4
 -------
