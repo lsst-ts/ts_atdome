@@ -25,13 +25,12 @@ This configuration only affects single-package Sphinx documentation builds.
 """
 
 import lsst.ts.atdome  # noqa
-from documenteer.conf.pipelinespkg import *  # type: ignore # noqa
+from documenteer.conf.guide import *  # noqa
 
 project = "ts_atdome"
 html_theme_options["logotext"] = project  # type: ignore # noqa
 html_title = project
 html_short_title = project
-doxylink = {}  # Avoid warning: Could not find tag file _doxygen/doxygen.tag
 
 intersphinx_mapping["ts_salobj"] = ("https://ts-salobj.lsst.io", None)  # type: ignore # noqa
 intersphinx_mapping["ts_simactuators"] = ("https://ts-simactuators.lsst.io", None)  # type: ignore # noqa
