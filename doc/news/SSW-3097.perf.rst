@@ -1,0 +1,1 @@
+In setup.py set local scheme to no local version.
